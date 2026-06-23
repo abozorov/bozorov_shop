@@ -27,7 +27,7 @@ func execAnalysis(res pgconn.CommandTag, err error) error {
 		return fmt.Errorf("user_repo.execAnalysis: %w", err)
 	}
 	if rows := res.RowsAffected(); rows == 0 {
-		return fmt.Errorf("user_repo.execAnalysis: %w", errs.ErrUserNotFound)
+		return fmt.Errorf("user_repo.execAnalysis: %w", errs.ErrNotFound)
 	}
 	return nil
 }

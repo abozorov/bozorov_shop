@@ -12,9 +12,11 @@ import (
 
 	"github.com/abozorov/bozorov_shop/internal/config"
 	"github.com/abozorov/bozorov_shop/internal/handlers"
+	orderhandler "github.com/abozorov/bozorov_shop/internal/handlers/order"
 	userhandler "github.com/abozorov/bozorov_shop/internal/handlers/user"
 	orderrepo "github.com/abozorov/bozorov_shop/internal/repo/order"
 	userrepo "github.com/abozorov/bozorov_shop/internal/repo/user"
+	orderservice "github.com/abozorov/bozorov_shop/internal/service/order"
 	userservice "github.com/abozorov/bozorov_shop/internal/service/user"
 	"github.com/abozorov/bozorov_shop/logger"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -52,12 +54,13 @@ func main() {
 	orderRepo := orderrepo.NewOrderRepo(db)
 
 	userService := userservice.NewUserService(userRepo, orderRepo)
-	// orderService := orderservice.NewOrderService()
+	orderService := orderservice.NewOrderService(userRepo, orderRepo)
 
 	userHandlers := userhandler.NewUserHandler(userService, logger)
+	orderHandlers := orderhandler.NewOrderHandler(orderService, logger)
 
 	// create router
-	router := handlers.NeweRouter(*userHandlers)
+	router := handlers.NewRouter(userHandlers, orderHandlers)
 	server := &http.Server{
 		Addr:    cfg.HttpHost,
 		Handler: router,

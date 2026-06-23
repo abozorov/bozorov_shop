@@ -25,11 +25,20 @@ func NewOrderService(userR *userrepo.UserRepo, orderR *orderrepo.OrderRepo) *Ord
 func (u *OrderService) Create(ctx context.Context, order models.Order) error {
 	// validation
 	if !order.Validate(true) {
-		return fmt.Errorf("order_service.GetByID: %w", errs.ErrNotFound)
+		return fmt.Errorf("order_service.Create: %w", errs.ErrBadRequestBody)
+	}
+
+	// check user from delete
+	usr, err := u.userR.GetByID(ctx, order.UserID)
+	if err != nil {
+		return fmt.Errorf("order_service.Create: %w", err)
+	}
+	if !usr.DeletedAt.IsZero() {
+		return fmt.Errorf("order_service.Create: %w", errs.ErrUserNotFound)
 	}
 
 	// creating
-	err := u.orderR.Create(ctx, order)
+	err = u.orderR.Create(ctx, order)
 	if err != nil {
 		return fmt.Errorf("order_service.Create: %w", err)
 	}
@@ -45,14 +54,7 @@ func (u *OrderService) GetAll(ctx context.Context) ([]models.Order, error) {
 	}
 
 	// get active orders
-	activeOrders := make([]models.Order, 0, len(allOrders))
-	for _, v := range allOrders {
-		if v.DeletedAt.IsZero() {
-			activeOrders = append(activeOrders, v)
-		}
-	}
-
-	return activeOrders, nil
+	return allOrders, nil
 }
 
 func (u *OrderService) GetByID(ctx context.Context, id int) (*models.Order, error) {
@@ -62,10 +64,6 @@ func (u *OrderService) GetByID(ctx context.Context, id int) (*models.Order, erro
 		return &models.Order{}, fmt.Errorf("order_service.GetByID: %w", err)
 	}
 
-	// get active orders
-	if !order.DeletedAt.IsZero() {
-		return &models.Order{}, fmt.Errorf("order_service.GetByID: %w", errs.ErrOrderNotFound)
-	}
 	return order, nil
 }
 
@@ -75,8 +73,17 @@ func (u *OrderService) Update(ctx context.Context, order models.Order) error {
 		return fmt.Errorf("order_service.Update: %w", errs.ErrBadRequestBody)
 	}
 
+	// check user from delete
+	usr, err := u.userR.GetByID(ctx, order.UserID)
+	if err != nil {
+		return fmt.Errorf("order_service.Create: %w", err)
+	}
+	if !usr.DeletedAt.IsZero() {
+		return fmt.Errorf("order_service.Create: %w", errs.ErrUserNotFound)
+	}
+
 	// updating
-	err := u.orderR.Update(ctx, order)
+	err = u.orderR.Update(ctx, order)
 	if err != nil {
 		return fmt.Errorf("order_service.Update: %w", err)
 	}
@@ -84,17 +91,11 @@ func (u *OrderService) Update(ctx context.Context, order models.Order) error {
 	return nil
 }
 
-func (u *OrderService) DeleteOrder(ctx context.Context, id int) error {
+func (u *OrderService) CancleOrder(ctx context.Context, id int) error {
 	// delete order
-	err := u.orderR.DeleteByID(ctx, id)
+	err := u.orderR.CancleByID(ctx, id)
 	if err != nil {
-		return fmt.Errorf("order_service.DeleteByID: %w", err)
-	}
-
-	// delete order orders
-	err = u.orderR.DeleteByOrderID(ctx, id)
-	if err != nil {
-		return fmt.Errorf("order_service.DeleteByID: %w", err)
+		return fmt.Errorf("order_service.CancleOrder: %w", err)
 	}
 
 	return nil

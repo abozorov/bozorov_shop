@@ -11,7 +11,7 @@ type Order struct {
 	Product   string
 	Price     float64
 	Status    string
-	CreatedAt time.Timer
+	CreatedAt time.Time
 }
 
 func (o *Order) Validate(create bool) bool {
@@ -29,5 +29,5 @@ func (o *Order) Validate(create bool) bool {
 		o.UserID > 0 &&
 		o.Product != "" &&
 		o.Price > 0 &&
-		validStatuses[o.Status]
+		(validStatuses[o.Status] || create)
 }
