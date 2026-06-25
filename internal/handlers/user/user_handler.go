@@ -10,8 +10,8 @@ import (
 
 	"github.com/abozorov/bozorov_shop/internal/models"
 	userservice "github.com/abozorov/bozorov_shop/internal/service/user"
-	"github.com/abozorov/bozorov_shop/logger"
 	"github.com/abozorov/bozorov_shop/pkg/errs"
+	"github.com/abozorov/bozorov_shop/pkg/logger"
 	"go.uber.org/zap"
 )
 
@@ -56,6 +56,48 @@ func newResponseUser(u models.User) *responseUser {
 	}
 }
 
+func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+	var req models.RegisterRequest
+
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		h.logger.Error("user_handler.Register: ", zap.String("error", err.Error()))
+		errs.ErrsToHttp(w, errs.ErrBadRequestBody)
+		return
+	}
+
+	if err = h.service.Register(r.Context(), req); err != nil {
+		h.logger.Error("user_handler.Register: ", zap.String("error", err.Error()))
+		errs.ErrsToHttp(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
+	w.Write([]byte("User Created"))
+}
+
+func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
+	var req models.LoginRequest
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		h.logger.Error("user_handler.Register: ", zap.String("error", err.Error()))
+		errs.ErrsToHttp(w, errs.ErrBadRequestBody)
+		return
+	}
+
+	token, err := h.service.Login(r.Context(), req)
+	if err != nil {
+		h.logger.Error("user_handler.Login: ", zap.String("error", err.Error()))
+		errs.ErrsToHttp(w, err)
+		return
+	}
+
+	if err = json.NewEncoder(w).Encode(map[string]string{"token": token}); err != nil {
+		h.logger.Error("user_handler.Register: ", zap.String("error", err.Error()))
+		errs.ErrsToHttp(w, errs.ErrSomethingWentWrong)
+	}
+}
+
 func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
@@ -69,17 +111,19 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	// creating & transform models.User -> user
 	err = h.service.Create(r.Context(), models.User{
-		Name:         usr.Name,
-		Email:        usr.Email,
-		Phone:        usr.Phone,
-		PasswordHash: usr.Password,
-		Role:         usr.Role,
+		Name:     usr.Name,
+		Email:    usr.Email,
+		Phone:    usr.Phone,
+		Password: usr.Password,
+		Role:     usr.Role,
 	})
 	if err != nil {
 		h.logger.Error("user_handler.Create: ", zap.String("error", err.Error()))
 		errs.ErrsToHttp(w, err)
 		return
 	}
+
+	w.WriteHeader(http.StatusCreated)
 	w.Write([]byte("User Created"))
 }
 

@@ -18,7 +18,7 @@ import (
 	userrepo "github.com/abozorov/bozorov_shop/internal/repo/user"
 	orderservice "github.com/abozorov/bozorov_shop/internal/service/order"
 	userservice "github.com/abozorov/bozorov_shop/internal/service/user"
-	"github.com/abozorov/bozorov_shop/logger"
+	"github.com/abozorov/bozorov_shop/pkg/logger"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
 )
@@ -89,5 +89,4 @@ func main() {
 	server.Shutdown(stopCtx)
 
 	logger.Info("Server shutdown completed")
-
 }

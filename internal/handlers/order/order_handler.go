@@ -10,8 +10,8 @@ import (
 
 	"github.com/abozorov/bozorov_shop/internal/models"
 	orderservice "github.com/abozorov/bozorov_shop/internal/service/order"
-	"github.com/abozorov/bozorov_shop/logger"
 	"github.com/abozorov/bozorov_shop/pkg/errs"
+	"github.com/abozorov/bozorov_shop/pkg/logger"
 	"go.uber.org/zap"
 )
 

@@ -2,7 +2,6 @@ package userrepo
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
 
 	"github.com/abozorov/bozorov_shop/internal/models"
@@ -32,18 +31,49 @@ func execAnalysis(res pgconn.CommandTag, err error) error {
 	return nil
 }
 
+func (r *UserRepo) Add(ctx context.Context, user models.User) error {
+	const query = `INSERT INTO users (name,email, password_hash,role) 
+		VALUES ($1, $2, $3, $4);
+	`
+	_, err := r.db.Exec(ctx, query,
+		user.Name,
+		user.Email,
+		user.Password,
+		user.Role,
+	)
+	if err != nil {
+		return fmt.Errorf("user_repo.Add: %w", errs.PostgresToErrs(err))
+	}
+	return nil
+}
+
+func (r *UserRepo) ExistsByEmail(ctx context.Context, email string) (bool, error) {
+	const query = `
+		SELECT EXISTS (
+			SELECT 1
+			FROM users
+			WHERE email = $1
+	);
+	`
+	var exists bool
+	err := r.db.QueryRow(ctx, query, email).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("user_repo.ExistsByEmail: %w", errs.PostgresToErrs(err))
+	}
+	return exists, nil
+}
+
 func (u *UserRepo) Create(ctx context.Context, user models.User) error {
 	const query = `
 		INSERT INTO users(name, email, phone, password_hash, role) VALUES
-		($1, $2, $3, $4, $5)
+		($1, $2, $3, $4, $5);
 	`
 
-	passwordHash := fmt.Sprintf("%x", sha256.Sum256([]byte(user.PasswordHash)))
 	_, err := u.db.Exec(ctx, query,
 		user.Name,
 		user.Email,
 		user.Phone,
-		passwordHash,
+		user.Password,
 		user.Role,
 	)
 	if err != nil {
@@ -61,7 +91,7 @@ func (u *UserRepo) GetAll(ctx context.Context) ([]models.User, error) {
 			role,
 			created_at,
 			deleted_at
-		 FROM users
+		 FROM users;
 	`
 	rows, err := u.db.Query(ctx, query)
 	if err != nil {
@@ -108,7 +138,7 @@ func (u *UserRepo) GetByID(ctx context.Context, id int) (*models.User, error) {
 			created_at,
 			deleted_at
 		 FROM users
-		 WHERE id = $1
+		 WHERE id = $1;
 	`
 	row := u.db.QueryRow(ctx, query, id)
 
@@ -133,6 +163,45 @@ func (u *UserRepo) GetByID(ctx context.Context, id int) (*models.User, error) {
 	return &user, nil
 }
 
+func (u *UserRepo) GetByEmail(ctx context.Context, email string) (*models.User, error) {
+	const query = `
+		SELECT  id,
+			name,
+			email,
+			password_hash,
+			phone,
+			role,
+			created_at,
+			deleted_at
+		 FROM users
+		 WHERE email = $1;
+	`
+	row := u.db.QueryRow(ctx, query, email)
+
+	var (
+		user      models.User
+		deletedAt pgtype.Timestamptz
+		phone pgtype.Text
+	)
+	err := row.Scan(
+		&user.ID,
+		&user.Name,
+		&user.Email,
+		&user.Password,
+		&phone,
+		&user.Role,
+		&user.CreatedAt,
+		&deletedAt,
+	)
+	if err != nil {
+		return &models.User{},
+			fmt.Errorf("user_repo.GetByEmail: %w", errs.PostgresToErrs(err))
+	}
+	user.DeletedAt = deletedAt.Time
+	user.Phone = phone.String
+	return &user, nil
+}
+
 func (u *UserRepo) Update(ctx context.Context, user models.User) error {
 	const query = `
 		UPDATE users
@@ -140,7 +209,7 @@ func (u *UserRepo) Update(ctx context.Context, user models.User) error {
 		email = $3,
 		phone = $4,
 		role = $5
-		WHERE id = $1 AND deleted_at IS null
+		WHERE id = $1 AND deleted_at IS null;
 	`
 
 	err := execAnalysis(u.db.Exec(ctx, query,
@@ -162,7 +231,7 @@ func (u *UserRepo) DeleteByID(ctx context.Context, id int) error {
 	const query = `
                 UPDATE users
                 SET deleted_at=current_timestamp
-                WHERE id=$1 AND deleted_at IS null
+                WHERE id=$1 AND deleted_at IS null;
 	`
 	err := execAnalysis(u.db.Exec(ctx, query, id))
 	if err != nil {

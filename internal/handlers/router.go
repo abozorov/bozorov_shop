@@ -9,27 +9,21 @@ import (
 )
 
 type Router struct {
-	*http.ServeMux
+	http.Handler
 }
 
 func NewRouter(u *userhandler.UserHandler, o *orderhandler.OrderHandler) *Router {
+
+
 	mux := http.NewServeMux()
 
-	// USER
-	mux.Handle("POST /users", middleware.Logging(http.HandlerFunc(u.Create)))
-	mux.Handle("GET /users", middleware.Logging(http.HandlerFunc(u.GetAll)))
-	mux.Handle("GET /user/{id}", middleware.Logging(http.HandlerFunc(u.GetByID)))
-	mux.Handle("PUT /user", middleware.Logging(http.HandlerFunc(u.Update)))
-	mux.Handle("DELETE /user/{id}", middleware.Logging(http.HandlerFunc(u.Delete)))
+	// ---------- Public ----------
+	mux.HandleFunc("POST /auth/register", u.Register)
+	mux.HandleFunc("POST /auth/login", u.Login)
 
-	// ORDERS
-	mux.Handle("POST /orders", middleware.Logging(http.HandlerFunc(o.Create)))
-	mux.Handle("GET /orders", middleware.Logging(http.HandlerFunc(o.GetAll)))
-	mux.Handle("GET /order/{id}", middleware.Logging(http.HandlerFunc(o.GetByID)))
-	mux.Handle("PUT /order", middleware.Logging(http.HandlerFunc(o.Update)))
-	mux.Handle("DELETE /order/{id}", middleware.Logging(http.HandlerFunc(o.CancleOrder)))
-
+	
 	return &Router{
-		mux,
+		middleware.Logging(mux),
 	}
 }
+

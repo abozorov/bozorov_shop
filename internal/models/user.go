@@ -1,28 +1,31 @@
 package models
 
 import (
-	"log"
 	"strings"
 	"time"
 	"unicode/utf8"
 )
 
+const (
+	UserRole  = "user"
+	AdminRole = "admin"
+)
+
 type User struct {
-	ID           int
-	Name         string
-	Email        string
-	Phone        string
-	PasswordHash string
-	Role         string
-	CreatedAt    time.Time
-	DeletedAt    time.Time
+	ID        int
+	Name      string
+	Email     string
+	Phone     string
+	Password  string
+	Role      string
+	CreatedAt time.Time
+	DeletedAt time.Time
 }
 
 func isEmail(email string) bool {
 	hasDog := false
 	k := 0
 	for _, v := range email {
-		log.Print(v)
 		if v == '@' {
 			hasDog = true
 			k++
@@ -50,13 +53,13 @@ func (u *User) Validate(create bool) bool {
 	u.Name = strings.TrimSpace(u.Name)
 	u.Email = strings.TrimSpace(u.Email)
 	u.Phone = strings.TrimSpace(u.Phone)
-	u.PasswordHash = strings.TrimSpace(u.PasswordHash)
+	u.Password = strings.TrimSpace(u.Password)
 	u.Role = strings.TrimSpace(u.Role)
 
 	return (u.ID > 0 || create) &&
 		u.Name != "" &&
 		isEmail(u.Email) &&
 		isTajik(u.Phone) &&
-		(u.PasswordHash != "" || !create) &&
+		(u.Password != "" || !create) &&
 		u.Role != ""
 }
