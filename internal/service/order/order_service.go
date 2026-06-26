@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/abozorov/bozorov_shop/internal/models"
+	mycontext "github.com/abozorov/bozorov_shop/internal/my_context"
 	orderrepo "github.com/abozorov/bozorov_shop/internal/repo/order"
 	userrepo "github.com/abozorov/bozorov_shop/internal/repo/user"
 	"github.com/abozorov/bozorov_shop/pkg/errs"
@@ -22,14 +23,14 @@ func NewOrderService(userR *userrepo.UserRepo, orderR *orderrepo.OrderRepo) *Ord
 	}
 }
 
-func (u *OrderService) Create(ctx context.Context, order models.Order) error {
+func (o *OrderService) Create(ctx context.Context, order models.Order) error {
 	// validation
 	if !order.Validate(true) {
 		return fmt.Errorf("order_service.Create: %w", errs.ErrBadRequestBody)
 	}
 
 	// check user from delete
-	usr, err := u.userR.GetByID(ctx, order.UserID)
+	usr, err := o.userR.GetByID(ctx, order.UserID)
 	if err != nil {
 		return fmt.Errorf("order_service.Create: %w", err)
 	}
@@ -38,7 +39,7 @@ func (u *OrderService) Create(ctx context.Context, order models.Order) error {
 	}
 
 	// creating
-	err = u.orderR.Create(ctx, order)
+	err = o.orderR.Create(ctx, order)
 	if err != nil {
 		return fmt.Errorf("order_service.Create: %w", err)
 	}
@@ -46,9 +47,9 @@ func (u *OrderService) Create(ctx context.Context, order models.Order) error {
 	return nil
 }
 
-func (u *OrderService) GetAll(ctx context.Context) ([]models.Order, error) {
+func (o *OrderService) GetAll(ctx context.Context) ([]models.Order, error) {
 	// get all orders
-	allOrders, err := u.orderR.GetAll(ctx)
+	allOrders, err := o.orderR.GetAll(ctx)
 	if err != nil {
 		return []models.Order{}, fmt.Errorf("order_service.GetAll: %w", err)
 	}
@@ -57,33 +58,62 @@ func (u *OrderService) GetAll(ctx context.Context) ([]models.Order, error) {
 	return allOrders, nil
 }
 
-func (u *OrderService) GetByID(ctx context.Context, id int) (*models.Order, error) {
+func (o *OrderService) GetAllByUserID(ctx context.Context, userID int) ([]models.Order, error) {
 	// get all orders
-	order, err := u.orderR.GetByID(ctx, id)
+	allOrders, err := o.orderR.GetAllByUserID(ctx, userID)
+	if err != nil {
+		return []models.Order{}, fmt.Errorf("order_service.GetAll: %w", err)
+	}
+
+	// get active orders
+	return allOrders, nil
+}
+
+func (o *OrderService) GetByID(ctx context.Context, id int) (*models.Order, error) {
+	// get order
+	order, err := o.orderR.GetByID(ctx, id)
 	if err != nil {
 		return &models.Order{}, fmt.Errorf("order_service.GetByID: %w", err)
+	}
+
+	// get userID
+	userID, ok := ctx.Value(mycontext.UserIDKey).(int)
+	if !ok {
+		return &models.Order{}, fmt.Errorf("order_service.GetByID: %w", errs.ErrIncorrectLoginOrPassword)
+	}
+	if order.UserID != userID {
+		return &models.Order{}, fmt.Errorf("order_service.GetByID: %w", errs.ErrBadRequest)
 	}
 
 	return order, nil
 }
 
-func (u *OrderService) Update(ctx context.Context, order models.Order) error {
+func (o *OrderService) Update(ctx context.Context, order models.Order) error {
 	// validation
 	if !order.Validate(false) {
 		return fmt.Errorf("order_service.Update: %w", errs.ErrBadRequestBody)
 	}
 
 	// check user from delete
-	usr, err := u.userR.GetByID(ctx, order.UserID)
+	usr, err := o.userR.GetByID(ctx, order.UserID)
 	if err != nil {
-		return fmt.Errorf("order_service.Create: %w", err)
+		return fmt.Errorf("order_service.Update: %w", err)
 	}
 	if !usr.DeletedAt.IsZero() {
-		return fmt.Errorf("order_service.Create: %w", errs.ErrUserNotFound)
+		return fmt.Errorf("order_service.Update: %w", errs.ErrUserNotFound)
+	}
+
+	// check user for order
+	oldOrder, err := o.orderR.GetByID(ctx, order.ID)
+	if err != nil {
+		return fmt.Errorf("order_service.Update: %w", err)
+	}
+	if oldOrder.UserID != order.UserID {
+		return fmt.Errorf("order_service.Update: %w", errs.ErrBadRequest)
 	}
 
 	// updating
-	err = u.orderR.Update(ctx, order)
+	err = o.orderR.Update(ctx, order)
 	if err != nil {
 		return fmt.Errorf("order_service.Update: %w", err)
 	}
@@ -91,9 +121,26 @@ func (u *OrderService) Update(ctx context.Context, order models.Order) error {
 	return nil
 }
 
-func (u *OrderService) CancleOrder(ctx context.Context, id int) error {
+func (o *OrderService) CancleOrder(ctx context.Context, id int) error {
+	// get order
+	order, err := o.orderR.GetByID(ctx, id)
+	if err != nil {
+		return fmt.Errorf("order_service.CancleOrder: %w", err)
+	}
+
+	// get userID
+	userID, ok := ctx.Value(mycontext.UserIDKey).(int)
+	if !ok {
+		return fmt.Errorf("order_service.GeCancleOrdertByID: %w", errs.ErrIncorrectLoginOrPassword)
+	}
+
+	// check user for orderr
+	if order.UserID != userID {
+		return fmt.Errorf("order_service.CancleOrder: %w", errs.ErrBadRequest)
+	}
+
 	// delete order
-	err := u.orderR.CancleByID(ctx, id)
+	err = o.orderR.CancleByID(ctx, id)
 	if err != nil {
 		return fmt.Errorf("order_service.CancleOrder: %w", err)
 	}

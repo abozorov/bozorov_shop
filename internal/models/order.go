@@ -26,7 +26,6 @@ func (o *Order) Validate(create bool) bool {
 	}
 
 	return (o.ID > 0 || create) &&
-		o.UserID > 0 &&
 		o.Product != "" &&
 		o.Price > 0 &&
 		(validStatuses[o.Status] || create)

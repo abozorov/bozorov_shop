@@ -90,6 +90,50 @@ func (o *OrderRepo) GetAll(ctx context.Context) ([]models.Order, error) {
 	return orders, nil
 }
 
+func (o *OrderRepo) GetAllByUserID(ctx context.Context, userID int) ([]models.Order, error) {
+	const query = `
+		SELECT  id,
+			user_id,
+			product,
+			price,
+			status,
+			created_at
+		 FROM orders
+		 WHERE user_id=$1;
+	`
+	rows, err := o.db.Query(ctx, query, userID)
+	if err != nil {
+		return []models.Order{},
+			fmt.Errorf("order_repo.GetAllByUserID: %w", errs.PostgresToErrs(err))
+	}
+	defer rows.Close()
+
+	orders := make([]models.Order, 0, 100)
+	order := models.Order{}
+
+	for rows.Next() {
+		err = rows.Scan(
+			&order.ID,
+			&order.UserID,
+			&order.Product,
+			&order.Price,
+			&order.Status,
+			&order.CreatedAt,
+		)
+
+		if err != nil {
+			return []models.Order{},
+				fmt.Errorf("order_repo.GetAll: %w", errs.PostgresToErrs(err))
+		}
+		orders = append(orders, order)
+	}
+
+	if len(orders) == 0 {
+		return orders, errs.ErrNotFound
+	}
+	return orders, nil
+}
+
 func (o *OrderRepo) GetByID(ctx context.Context, id int) (*models.Order, error) {
 	const query = `
 		SELECT  id,

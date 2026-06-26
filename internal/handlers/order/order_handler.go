@@ -1,7 +1,6 @@
 package orderhandler
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -9,6 +8,7 @@ import (
 	"time"
 
 	"github.com/abozorov/bozorov_shop/internal/models"
+	mycontext "github.com/abozorov/bozorov_shop/internal/my_context"
 	orderservice "github.com/abozorov/bozorov_shop/internal/service/order"
 	"github.com/abozorov/bozorov_shop/pkg/errs"
 	"github.com/abozorov/bozorov_shop/pkg/logger"
@@ -28,8 +28,6 @@ func NewOrderHandler(service *orderservice.OrderService, logger *logger.Logger) 
 }
 
 type requestOrder struct {
-	ID      int     `json:"id"`
-	UserID  int     `json:"user_id"`
 	Product string  `json:"product"`
 	Price   float64 `json:"price"`
 	Status  string  `json:"status"`
@@ -55,7 +53,7 @@ func newResponseOrder(o models.Order) *responseOrder {
 	}
 }
 
-func (o *OrderHandler) Create(w http.ResponseWriter, r *http.Request) {
+func (o *OrderHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	// get order
@@ -66,9 +64,17 @@ func (o *OrderHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// get userID
+	userID, ok := r.Context().Value(mycontext.UserIDKey).(int)
+	if !ok {
+		o.logger.Error("order_handler.CreateOrder: ", zap.String("error", errs.ErrIncorrectLoginOrPassword.Error()))
+		errs.ErrsToHttp(w, errs.ErrIncorrectLoginOrPassword)
+		return
+	}
+
 	// creating & transform models.Order -> order
 	err = o.service.Create(r.Context(), models.Order{
-		UserID:  order.UserID,
+		UserID:  userID,
 		Product: order.Product,
 		Price:   order.Price,
 	})
@@ -80,13 +86,20 @@ func (o *OrderHandler) Create(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("Order Created"))
 }
 
-func (o *OrderHandler) GetAll(w http.ResponseWriter, r *http.Request) {
+// Admin
+func (o *OrderHandler) GetMyOrders(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
+	// get userID
+	userID, ok := r.Context().Value(mycontext.UserIDKey).(int)
+	if !ok {
+		o.logger.Error("order_handler.UpdateOrder: ", zap.String("error", errs.ErrIncorrectLoginOrPassword.Error()))
+		errs.ErrsToHttp(w, errs.ErrIncorrectLoginOrPassword)
+		return
+	}
+
 	// load all
-	ctx, cancle := context.WithTimeout(r.Context(), time.Second*2)
-	defer cancle()
-	orders, err := o.service.GetAll(ctx)
+	orders, err := o.service.GetAllByUserID(r.Context(), userID)
 	if err != nil {
 		o.logger.Error("order_handler.GetAll: ", zap.String("error", err.Error()))
 		errs.ErrsToHttp(w, err)
@@ -108,7 +121,7 @@ func (o *OrderHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (o *OrderHandler) GetByID(w http.ResponseWriter, r *http.Request) {
+func (o *OrderHandler) GetOrderByID(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	// check path
@@ -138,7 +151,7 @@ func (o *OrderHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (o *OrderHandler) Update(w http.ResponseWriter, r *http.Request) {
+func (o *OrderHandler) UpdateOrder(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	// get order
@@ -149,10 +162,26 @@ func (o *OrderHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// check path
+	orderID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		o.logger.Error("order_handler.GetByID: ", zap.String("error", err.Error()))
+		errs.ErrsToHttp(w, errs.ErrBadRequest)
+		return
+	}
+
+	// get userID
+	userID, ok := r.Context().Value(mycontext.UserIDKey).(int)
+	if !ok {
+		o.logger.Error("order_handler.UpdateOrder: ", zap.String("error", errs.ErrIncorrectLoginOrPassword.Error()))
+		errs.ErrsToHttp(w, errs.ErrIncorrectLoginOrPassword)
+		return
+	}
+
 	// creating & transform models.Order -> order
 	err = o.service.Update(r.Context(), models.Order{
-		ID:      order.ID,
-		UserID:  order.UserID,
+		ID:      orderID,
+		UserID:  userID,
 		Product: order.Product,
 		Price:   order.Price,
 		Status:  order.Status,

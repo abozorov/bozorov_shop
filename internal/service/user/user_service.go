@@ -2,7 +2,9 @@ package userservice
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/abozorov/bozorov_shop/internal/models"
 	orderrepo "github.com/abozorov/bozorov_shop/internal/repo/order"
@@ -68,6 +70,10 @@ func (u *UserService) Login(ctx context.Context, request models.LoginRequest) (t
 	user, err := u.userR.GetByEmail(ctx, request.Email)
 	if err != nil {
 		return "", fmt.Errorf("user_service.Login: %w", err)
+	}
+
+	if !user.DeletedAt.IsZero() {
+		return "", fmt.Errorf("user_service.Login: %w", errs.ErrUserNotFound)
 	}
 
 	err = password.Compare(user.Password, request.Password)
@@ -139,7 +145,9 @@ func (u *UserService) GetByID(ctx context.Context, id int) (*models.User, error)
 
 func (u *UserService) Update(ctx context.Context, user models.User) error {
 	// validation
-	if !user.Validate(false) {
+	user.Name = strings.TrimSpace(user.Name)
+	user.Phone = strings.TrimSpace(user.Phone)
+	if user.Name == "" || user.Phone == "" {
 		return fmt.Errorf("user_service.Update: %w", errs.ErrBadRequestBody)
 	}
 
@@ -161,7 +169,7 @@ func (u *UserService) DeleteUser(ctx context.Context, id int) error {
 
 	// delete user orders
 	err = u.orderR.DeleteByUserID(ctx, id)
-	if err != nil {
+	if err != nil && !errors.Is(err, errs.ErrNotFound) {
 		return fmt.Errorf("user_service.DeleteByID: %w", err)
 	}
 

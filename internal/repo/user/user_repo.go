@@ -133,6 +133,7 @@ func (u *UserRepo) GetByID(ctx context.Context, id int) (*models.User, error) {
 		SELECT  id,
 			name,
 			email,
+			password_hash,
 			phone,
 			role,
 			created_at,
@@ -145,12 +146,14 @@ func (u *UserRepo) GetByID(ctx context.Context, id int) (*models.User, error) {
 	var (
 		user      models.User
 		deletedAt pgtype.Timestamptz
+		phone     pgtype.Text
 	)
 	err := row.Scan(
 		&user.ID,
 		&user.Name,
 		&user.Email,
-		&user.Phone,
+		&user.Password,
+		&phone,
 		&user.Role,
 		&user.CreatedAt,
 		&deletedAt,
@@ -160,6 +163,7 @@ func (u *UserRepo) GetByID(ctx context.Context, id int) (*models.User, error) {
 			fmt.Errorf("user_repo.GetByID: %w", errs.PostgresToErrs(err))
 	}
 	user.DeletedAt = deletedAt.Time
+	user.Phone = phone.String
 	return &user, nil
 }
 
@@ -181,7 +185,7 @@ func (u *UserRepo) GetByEmail(ctx context.Context, email string) (*models.User, 
 	var (
 		user      models.User
 		deletedAt pgtype.Timestamptz
-		phone pgtype.Text
+		phone     pgtype.Text
 	)
 	err := row.Scan(
 		&user.ID,
@@ -206,18 +210,14 @@ func (u *UserRepo) Update(ctx context.Context, user models.User) error {
 	const query = `
 		UPDATE users
 		SET name = $2,
-		email = $3,
-		phone = $4,
-		role = $5
+		phone = $3
 		WHERE id = $1 AND deleted_at IS null;
 	`
 
 	err := execAnalysis(u.db.Exec(ctx, query,
 		user.ID,
 		user.Name,
-		user.Email,
 		user.Phone,
-		user.Role,
 	))
 
 	if err != nil {

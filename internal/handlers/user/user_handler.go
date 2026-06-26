@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/abozorov/bozorov_shop/internal/models"
+	mycontext "github.com/abozorov/bozorov_shop/internal/my_context"
 	userservice "github.com/abozorov/bozorov_shop/internal/service/user"
 	"github.com/abozorov/bozorov_shop/pkg/errs"
 	"github.com/abozorov/bozorov_shop/pkg/logger"
@@ -27,13 +27,9 @@ func NewUserHandler(service *userservice.UserService, logger *logger.Logger) *Us
 	}
 }
 
-type requestUser struct {
-	ID       int    `json:"id"`
-	Name     string `json:"name"`
-	Email    string `json:"email"`
-	Phone    string `json:"phone"`
-	Password string `json:"password"`
-	Role     string `json:"role"`
+type updateUser struct {
+	Name  string `json:"name"`
+	Phone string `json:"phone"`
 }
 
 type responseUser struct {
@@ -98,36 +94,8 @@ func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
-	defer r.Body.Close()
-
-	// get user
-	usr := requestUser{}
-	err := json.NewDecoder(r.Body).Decode(&usr)
-	if err != nil {
-		errs.ErrsToHttp(w, errs.ErrBadRequestBody)
-		return
-	}
-
-	// creating & transform models.User -> user
-	err = h.service.Create(r.Context(), models.User{
-		Name:     usr.Name,
-		Email:    usr.Email,
-		Phone:    usr.Phone,
-		Password: usr.Password,
-		Role:     usr.Role,
-	})
-	if err != nil {
-		h.logger.Error("user_handler.Create: ", zap.String("error", err.Error()))
-		errs.ErrsToHttp(w, err)
-		return
-	}
-
-	w.WriteHeader(http.StatusCreated)
-	w.Write([]byte("User Created"))
-}
-
-func (h *UserHandler) GetAll(w http.ResponseWriter, r *http.Request) {
+// Admin
+func (h *UserHandler) GetAllUsers(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	// load all
@@ -155,14 +123,14 @@ func (h *UserHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *UserHandler) GetByID(w http.ResponseWriter, r *http.Request) {
+func (h *UserHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
-	// check path
-	id, err := strconv.Atoi(r.PathValue("id"))
-	if err != nil {
-		h.logger.Error("user_handler.GetByID: ", zap.String("error", err.Error()))
-		errs.ErrsToHttp(w, errs.ErrBadRequest)
+	// get id
+	id, ok := r.Context().Value(mycontext.UserIDKey).(int)
+	if !ok {
+		h.logger.Error("user_handler.GetMe: ", zap.String("error", errs.ErrIncorrectLoginOrPassword.Error()))
+		errs.ErrsToHttp(w, errs.ErrIncorrectLoginOrPassword)
 		return
 	}
 
@@ -185,11 +153,19 @@ func (h *UserHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
+func (h *UserHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
+	// get id
+	id, ok := r.Context().Value(mycontext.UserIDKey).(int)
+	if !ok {
+		h.logger.Error("user_handler.GetMe: ", zap.String("error", errs.ErrIncorrectLoginOrPassword.Error()))
+		errs.ErrsToHttp(w, errs.ErrIncorrectLoginOrPassword)
+		return
+	}
+
 	// get user
-	usr := requestUser{}
+	usr := updateUser{}
 	err := json.NewDecoder(r.Body).Decode(&usr)
 	if err != nil {
 		errs.ErrsToHttp(w, errs.ErrBadRequestBody)
@@ -198,11 +174,9 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	// creating & transform models.User -> user
 	err = h.service.Update(r.Context(), models.User{
-		ID:    usr.ID,
+		ID:    id,
 		Name:  usr.Name,
-		Email: usr.Email,
 		Phone: usr.Phone,
-		Role:  usr.Role,
 	})
 	if err != nil {
 		h.logger.Error("user_handler.Update: ", zap.String("error", err.Error()))
@@ -212,21 +186,21 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("User updated"))
 }
 
-func (h *UserHandler) Delete(w http.ResponseWriter, r *http.Request) {
+func (h *UserHandler) DeleteMe(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
-	// check path
-	id, err := strconv.Atoi(r.PathValue("id"))
-	if err != nil {
-		h.logger.Error("user_handler.Delete: ", zap.String("error", err.Error()))
-		errs.ErrsToHttp(w, errs.ErrBadRequest)
+	// get id
+	id, ok := r.Context().Value(mycontext.UserIDKey).(int)
+	if !ok {
+		h.logger.Error("user_handler.DeleteMe: ", zap.String("error", errs.ErrIncorrectLoginOrPassword.Error()))
+		errs.ErrsToHttp(w, errs.ErrIncorrectLoginOrPassword)
 		return
 	}
 
 	// get by id
-	err = h.service.DeleteUser(r.Context(), id)
+	err := h.service.DeleteUser(r.Context(), id)
 	if err != nil {
-		h.logger.Error("user_handler.Delete: ", zap.String("error", err.Error()))
+		h.logger.Error("user_handler.DeleteMe: ", zap.String("error", err.Error()))
 		errs.ErrsToHttp(w, err)
 		return
 	}
