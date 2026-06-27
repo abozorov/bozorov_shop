@@ -68,7 +68,6 @@ func (u *UserService) Register(ctx context.Context, request models.RegisterReque
 	if err != nil {
 		return fmt.Errorf("user_service.Register: %w", err)
 	}
-
 	if exists {
 		return fmt.Errorf("user_service.Register: %w", errs.ErrUserAlreadyExists)
 	}
@@ -95,6 +94,10 @@ func (u *UserService) Register(ctx context.Context, request models.RegisterReque
 		return fmt.Errorf("user_service.Register: %w", err)
 	}
 
+	_, ok := u.memCache.Get(request.Email)
+	if ok {
+		return fmt.Errorf("user_service.Register: %w", errs.ErrUserNotBeenVerified)
+	}
 	u.memCache.Set(user.Email, sendOtp{
 		code:   otpCode,
 		user:   &user,
