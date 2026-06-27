@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"math/rand"
 	"strconv"
 	"strings"
@@ -51,8 +52,10 @@ type sendOtp struct {
 	user *models.User
 }
 
-// func (u *UserService) Verification(ctx context.Context, request models.RegisterRequest) error {
-// }
+func (u *UserService) Verification(ctx context.Context, request models.Verification) error {
+	u.verification <- &request
+	return nil
+}
 
 func (u *UserService) Register(ctx context.Context, request models.RegisterRequest) error {
 	err := request.Validate()
@@ -98,19 +101,30 @@ func (u *UserService) Register(ctx context.Context, request models.RegisterReque
 	verificationCtx, cancle := context.WithTimeout(context.Background(), time.Minute*5-time.Second)
 	defer cancle()
 
-	select {
-	case <-verificationCtx.Done():
-		return fmt.Errorf("user_service.Register: %w", errs.ErrTimeoutExceeded)
-	case verr := <-u.verification:
-		user, ok := u.memCache.Get(verr.Email)
-		if !ok {
-			return fmt.Errorf("user_service.Register: %w", errs.ErrBadRequest)
+	for {
+		select {
+		case <-verificationCtx.Done():
+			user, _ := u.memCache.Get(user.Email)
+			log.Println(user.(sendOtp).code, *user.(sendOtp).user)
+
+			return fmt.Errorf("user_service.Register: %w", errs.ErrTimeoutExceeded)
+		case verr := <-u.verification:
+			user, ok := u.memCache.Get(verr.Email)
+			if !ok {
+				u.verification <- verr
+				continue
+			}
+
+			if user.(sendOtp).code != verr.Code {
+				return fmt.Errorf("user_service.Register: %w", errs.ErrVerifyingFailed)
+			}
+
+			err = u.userR.Add(ctx, *user.(sendOtp).user)
+			if err != nil {
+				return fmt.Errorf("user_service.Register: %w", err)
+			}
+			return nil
 		}
-		err = u.userR.Add(ctx, user.(models.User))
-		if err != nil {
-			return fmt.Errorf("user_service.Register: %w", err)
-		}
-		return nil
 	}
 }
 

@@ -56,7 +56,6 @@ func newResponseUser(u models.User) *responseUser {
 	}
 }
 
-
 func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	var req models.RegisterRequest
@@ -79,7 +78,24 @@ func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 // принимаем код, после проверяяем и создаем запрос для похранения в БД
 func (h *UserHandler) Verify(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
 
+	var req models.Verification
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		h.logger.Error("user_handler.Verify: ", zap.String("error", err.Error()))
+		errs.ErrsToHttp(w, errs.ErrBadRequestBody)
+		return
+	}
+
+	// sending code
+	err = h.service.Verification(r.Context(), req)
+	if err != nil {
+		h.logger.Error("user_handler.Verify: ", zap.String("error", err.Error()))
+		errs.ErrsToHttp(w, err)
+		return
+	}
+	w.Write([]byte("send for verrification"))
 }
 
 func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {

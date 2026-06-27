@@ -27,6 +27,9 @@ var (
 	// Timeout exceeded
 	ErrTimeoutExceeded = errors.New("timeout exceeded")
 
+	// Verify
+	ErrVerifyingFailed = errors.New("Verifying failed")
+
 	// Unautorized
 	ErrIncorrectLoginOrPassword = errors.New("incorrect login or password")
 	ErrIncorrectPassword        = errors.New("incorrect password")
@@ -60,6 +63,9 @@ func ErrsToHttp(w http.ResponseWriter, err error) {
 		http.Error(w, ErrBadRequestQuery.Error(), http.StatusBadRequest)
 	case errors.Is(err, ErrInvalidUserId):
 		http.Error(w, ErrInvalidUserId.Error(), http.StatusBadRequest)
+	case errors.Is(err, ErrVerifyingFailed):
+		http.Error(w, ErrVerifyingFailed.Error(), http.StatusBadRequest)
+
 
 	// http.StatusTooManyRequests
 	case errors.Is(err, ErrTooManyRequests):

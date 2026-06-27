@@ -18,7 +18,7 @@ func NewRouter(u *userhandler.UserHandler, o *orderhandler.OrderHandler, middlew
 	// ---------- Public ----------
 	mux.HandleFunc("POST /auth/register", u.Register)
 	mux.HandleFunc("POST /auth/login", u.Login)
-	mux.HandleFunc("POST user/verify", u.Verify)
+	mux.HandleFunc("POST /user/verify", u.Verify)
 
 	// ---------- Authorized user ----------
 	mux.Handle("GET /users/me", //✅
