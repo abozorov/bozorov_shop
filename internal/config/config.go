@@ -9,6 +9,11 @@ import (
 type Config struct {
 	ServerConfig
 	DBConfig
+	JWTSecret
+}
+
+type JWTSecret struct {
+	SecretToken string `env:"SECRETTOKEN"`
 }
 
 type ServerConfig struct {

@@ -12,7 +12,7 @@ type Router struct {
 	http.Handler
 }
 
-func NewRouter(u *userhandler.UserHandler, o *orderhandler.OrderHandler) *Router {
+func NewRouter(u *userhandler.UserHandler, o *orderhandler.OrderHandler, middleware *middleware.Middleware) *Router {
 	mux := http.NewServeMux()
 
 	// ---------- Public ----------
@@ -47,15 +47,15 @@ func NewRouter(u *userhandler.UserHandler, o *orderhandler.OrderHandler) *Router
 	)
 
 	// ---------- Admin ----------
-	mux.Handle("GET /admin/users",
-		middleware.Auth(http.HandlerFunc(u.GetAllUsers)),
+	mux.Handle("GET /admin/users", //✅ (Admin)
+		middleware.AuthAdmin(http.HandlerFunc(u.GetAllUsers)),
 	)
-	// mux.Handle("GET /admin/orders",
-	// 	middleware.Auth(http.HandlerFunc(o.GetAllOrders)),
-	// )
-	// mux.Handle("PATCH /admin/users/{id}/role",
-	// 	middleware.Auth(http.HandlerFunc(u.UpdateUserRole)),
-	// )
+	mux.Handle("GET /admin/orders", //✅ (Admin)
+		middleware.AuthAdmin(http.HandlerFunc(o.GetAllOrders)),
+	)
+	mux.Handle("PATCH /admin/users/{id}/role", //✅ (Admin)
+		middleware.AuthAdmin(http.HandlerFunc(u.UpdateUserRole)),
+	)
 
 	// Logging применяется ко всем маршрутам, включая public.
 	return &Router{

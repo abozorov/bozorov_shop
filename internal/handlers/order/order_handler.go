@@ -79,7 +79,7 @@ func (o *OrderHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 		Price:   order.Price,
 	})
 	if err != nil {
-		o.logger.Error("order_handler.Create: ", zap.String("error", err.Error()))
+		o.logger.Error("order_handler.CreateOrder: ", zap.String("error", err.Error()))
 		errs.ErrsToHttp(w, err)
 		return
 	}
@@ -87,21 +87,13 @@ func (o *OrderHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 }
 
 // Admin
-func (o *OrderHandler) GetMyOrders(w http.ResponseWriter, r *http.Request) {
+func (o *OrderHandler) GetAllOrders(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
-	// get userID
-	userID, ok := r.Context().Value(mycontext.UserIDKey).(int)
-	if !ok {
-		o.logger.Error("order_handler.UpdateOrder: ", zap.String("error", errs.ErrIncorrectLoginOrPassword.Error()))
-		errs.ErrsToHttp(w, errs.ErrIncorrectLoginOrPassword)
-		return
-	}
-
 	// load all
-	orders, err := o.service.GetAllByUserID(r.Context(), userID)
+	orders, err := o.service.GetAll(r.Context())
 	if err != nil {
-		o.logger.Error("order_handler.GetAll: ", zap.String("error", err.Error()))
+		o.logger.Error("order_handler.GetAllOrders: ", zap.String("error", err.Error()))
 		errs.ErrsToHttp(w, err)
 		return
 	}
@@ -115,7 +107,41 @@ func (o *OrderHandler) GetMyOrders(w http.ResponseWriter, r *http.Request) {
 	// write request
 	err = json.NewEncoder(w).Encode(resp)
 	if err != nil {
-		o.logger.Error("order_handler.GetAll: ", zap.String("error", err.Error()))
+		o.logger.Error("order_handler.GetAllOrders: ", zap.String("error", err.Error()))
+		errs.ErrsToHttp(w, err)
+		return
+	}
+}
+
+func (o *OrderHandler) GetMyOrders(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	// get userID
+	userID, ok := r.Context().Value(mycontext.UserIDKey).(int)
+	if !ok {
+		o.logger.Error("order_handler.GetMyOrders: ", zap.String("error", errs.ErrIncorrectLoginOrPassword.Error()))
+		errs.ErrsToHttp(w, errs.ErrIncorrectLoginOrPassword)
+		return
+	}
+
+	// load all
+	orders, err := o.service.GetAllByUserID(r.Context(), userID)
+	if err != nil {
+		o.logger.Error("order_handler.GetMyOrders: ", zap.String("error", err.Error()))
+		errs.ErrsToHttp(w, err)
+		return
+	}
+
+	// transform models.Order -> order
+	resp := make([]responseOrder, 0, len(orders))
+	for _, v := range orders {
+		resp = append(resp, *newResponseOrder(v))
+	}
+
+	// write request
+	err = json.NewEncoder(w).Encode(resp)
+	if err != nil {
+		o.logger.Error("order_handler.GetMyOrders: ", zap.String("error", err.Error()))
 		errs.ErrsToHttp(w, err)
 		return
 	}
@@ -127,7 +153,7 @@ func (o *OrderHandler) GetOrderByID(w http.ResponseWriter, r *http.Request) {
 	// check path
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		o.logger.Error("order_handler.GetByID: ", zap.String("error", err.Error()))
+		o.logger.Error("order_handler.GetOrderByID: ", zap.String("error", err.Error()))
 		errs.ErrsToHttp(w, errs.ErrBadRequest)
 		return
 	}
@@ -135,7 +161,7 @@ func (o *OrderHandler) GetOrderByID(w http.ResponseWriter, r *http.Request) {
 	// get by id
 	order, err := o.service.GetByID(r.Context(), id)
 	if err != nil {
-		o.logger.Error("order_handler.GetByID: ", zap.String("error", err.Error()))
+		o.logger.Error("order_handler.GetOrderByID: ", zap.String("error", err.Error()))
 		errs.ErrsToHttp(w, err)
 		return
 	}
@@ -146,7 +172,7 @@ func (o *OrderHandler) GetOrderByID(w http.ResponseWriter, r *http.Request) {
 	// write response
 	err = json.NewEncoder(w).Encode(resp)
 	if err != nil {
-		o.logger.Error("order_handler.GetAll: ", zap.String("error", err.Error()))
+		o.logger.Error("order_handler.GetOrderByID: ", zap.String("error", err.Error()))
 		errs.ErrsToHttp(w, err)
 	}
 }
@@ -165,7 +191,7 @@ func (o *OrderHandler) UpdateOrder(w http.ResponseWriter, r *http.Request) {
 	// check path
 	orderID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		o.logger.Error("order_handler.GetByID: ", zap.String("error", err.Error()))
+		o.logger.Error("order_handler.UpdateOrder: ", zap.String("error", err.Error()))
 		errs.ErrsToHttp(w, errs.ErrBadRequest)
 		return
 	}
@@ -187,7 +213,7 @@ func (o *OrderHandler) UpdateOrder(w http.ResponseWriter, r *http.Request) {
 		Status:  order.Status,
 	})
 	if err != nil {
-		o.logger.Error("order_handler.Update: ", zap.String("error", err.Error()))
+		o.logger.Error("order_handler.UpdateOrder: ", zap.String("error", err.Error()))
 		errs.ErrsToHttp(w, err)
 		return
 	}

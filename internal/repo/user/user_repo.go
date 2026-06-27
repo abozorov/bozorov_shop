@@ -226,6 +226,25 @@ func (u *UserRepo) Update(ctx context.Context, user models.User) error {
 	return nil
 }
 
+
+func (u *UserRepo) UpdateUserRole(ctx context.Context, user models.User) error {
+	const query = `
+		UPDATE users
+		SET role = $2
+		WHERE id = $1 AND deleted_at IS null;
+	`
+
+	err := execAnalysis(u.db.Exec(ctx, query,
+		user.ID,
+		user.Role,
+	))
+
+	if err != nil {
+		return fmt.Errorf("user_repo.UpdateUserRole: %w", errs.PostgresToErrs(err))
+	}
+	return nil
+}
+
 func (u *UserRepo) DeleteByID(ctx context.Context, id int) error {
 	// update with id
 	const query = `

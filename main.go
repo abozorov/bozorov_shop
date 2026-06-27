@@ -12,12 +12,14 @@ import (
 
 	"github.com/abozorov/bozorov_shop/internal/config"
 	"github.com/abozorov/bozorov_shop/internal/handlers"
+	"github.com/abozorov/bozorov_shop/internal/handlers/middleware"
 	orderhandler "github.com/abozorov/bozorov_shop/internal/handlers/order"
 	userhandler "github.com/abozorov/bozorov_shop/internal/handlers/user"
 	orderrepo "github.com/abozorov/bozorov_shop/internal/repo/order"
 	userrepo "github.com/abozorov/bozorov_shop/internal/repo/user"
 	orderservice "github.com/abozorov/bozorov_shop/internal/service/order"
 	userservice "github.com/abozorov/bozorov_shop/internal/service/user"
+	"github.com/abozorov/bozorov_shop/pkg/jwt"
 	"github.com/abozorov/bozorov_shop/pkg/logger"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
@@ -49,24 +51,31 @@ func main() {
 	if err != nil {
 		logger.Fatal("Error config load", zap.String("error:", err.Error()))
 	}
+
+	// create SecretJWT
+	sJWT := jwt.NewSecretJWT(cfg.SecretToken)
+
 	// create layers
 	userRepo := userrepo.NewUserRepo(db)
 	orderRepo := orderrepo.NewOrderRepo(db)
 
-	userService := userservice.NewUserService(userRepo, orderRepo)
+	userService := userservice.NewUserService(userRepo, orderRepo, sJWT)
 	orderService := orderservice.NewOrderService(userRepo, orderRepo)
 
 	userHandlers := userhandler.NewUserHandler(userService, logger)
 	orderHandlers := orderhandler.NewOrderHandler(orderService, logger)
 
+	// create middleware
+	mid := middleware.NewMiddlware(userRepo, sJWT)
+
 	// create router
-	router := handlers.NewRouter(userHandlers, orderHandlers)
+	router := handlers.NewRouter(userHandlers, orderHandlers, mid)
 	server := &http.Server{
 		Addr:    cfg.HttpHost,
 		Handler: router,
 	}
 
-	// statrt server
+	// start server
 	go func() {
 		logger.Info(fmt.Sprintf("Server started localhost:%s started", server.Addr))
 		err := server.ListenAndServe()

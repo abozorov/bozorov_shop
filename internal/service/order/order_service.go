@@ -62,7 +62,7 @@ func (o *OrderService) GetAllByUserID(ctx context.Context, userID int) ([]models
 	// get all orders
 	allOrders, err := o.orderR.GetAllByUserID(ctx, userID)
 	if err != nil {
-		return []models.Order{}, fmt.Errorf("order_service.GetAll: %w", err)
+		return []models.Order{}, fmt.Errorf("order_service.GetAllByUserID: %w", err)
 	}
 
 	// get active orders
@@ -131,7 +131,7 @@ func (o *OrderService) CancleOrder(ctx context.Context, id int) error {
 	// get userID
 	userID, ok := ctx.Value(mycontext.UserIDKey).(int)
 	if !ok {
-		return fmt.Errorf("order_service.GeCancleOrdertByID: %w", errs.ErrIncorrectLoginOrPassword)
+		return fmt.Errorf("order_service.CancleOrder: %w", errs.ErrIncorrectLoginOrPassword)
 	}
 
 	// check user for orderr

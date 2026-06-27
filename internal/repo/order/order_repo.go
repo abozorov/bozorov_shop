@@ -123,7 +123,7 @@ func (o *OrderRepo) GetAllByUserID(ctx context.Context, userID int) ([]models.Or
 
 		if err != nil {
 			return []models.Order{},
-				fmt.Errorf("order_repo.GetAll: %w", errs.PostgresToErrs(err))
+				fmt.Errorf("order_repo.GetAllByUserID: %w", errs.PostgresToErrs(err))
 		}
 		orders = append(orders, order)
 	}
@@ -199,7 +199,7 @@ func (o *OrderRepo) CancleByID(ctx context.Context, id int) error {
 
 	err := execAnalysis(o.db.Exec(ctx, query, id))
 	if err != nil {
-		return fmt.Errorf("order_repo.DeleteByID: %w", errs.PostgresToErrs(err))
+		return fmt.Errorf("order_repo.CancleByID: %w", errs.PostgresToErrs(err))
 	}
 	return nil
 }

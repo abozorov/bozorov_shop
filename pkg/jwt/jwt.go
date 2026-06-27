@@ -7,7 +7,9 @@ import (
 	jwt "github.com/golang-jwt/jwt/v5"
 )
 
-var secret = []byte("7TPCVN4RIFGL2AQrX+YD+u9qZSgP9lCvSQoECDZ5Puw=")
+type JWTSecret struct {
+	secret []byte
+}
 
 type Claims struct {
 	UserID int    `json:"user_id"`
@@ -17,7 +19,13 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-func GenerateToken(userID int, email, role string) (string, error) {
+func NewSecretJWT(secret string) *JWTSecret {
+	return &JWTSecret{
+		secret: []byte(secret),
+	}
+}
+
+func (s *JWTSecret) GenerateToken(userID int, email, role string) (string, error) {
 	claims := Claims{
 		UserID: userID,
 		Email:  email,
@@ -29,10 +37,10 @@ func GenerateToken(userID int, email, role string) (string, error) {
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
-	return token.SignedString(secret)
+	return token.SignedString(s.secret)
 }
 
-func ParseToken(tokenString string) (*Claims, error) {
+func (s *JWTSecret) ParseToken(tokenString string) (*Claims, error) {
 	token, err := jwt.ParseWithClaims(
 		tokenString,
 		&Claims{},
@@ -40,7 +48,7 @@ func ParseToken(tokenString string) (*Claims, error) {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 			}
-			return secret, nil
+			return s.secret, nil
 		},
 	)
 

@@ -17,12 +17,14 @@ import (
 type UserService struct {
 	userR  *userrepo.UserRepo
 	orderR *orderrepo.OrderRepo
+	jwt    *jwt.JWTSecret
 }
 
-func NewUserService(userR *userrepo.UserRepo, orderR *orderrepo.OrderRepo) *UserService {
+func NewUserService(userR *userrepo.UserRepo, orderR *orderrepo.OrderRepo, jwt *jwt.JWTSecret) *UserService {
 	return &UserService{
 		userR:  userR,
 		orderR: orderR,
+		jwt:    jwt,
 	}
 }
 
@@ -81,19 +83,18 @@ func (u *UserService) Login(ctx context.Context, request models.LoginRequest) (t
 		return "", fmt.Errorf("user_service.Login: %w", err)
 	}
 
-	token, err = jwt.GenerateToken(user.ID, user.Email, user.Role)
+	token, err = u.jwt.GenerateToken(user.ID, user.Email, user.Role)
 	if err != nil {
 		return "", fmt.Errorf("user_service.Login: %w", err)
 	}
 
 	return token, nil
-
 }
 
 func (u *UserService) Create(ctx context.Context, user models.User) error {
 	// validation
 	if !user.Validate(true) {
-		return fmt.Errorf("user_service.GetByID: %w", errs.ErrUserNotFound)
+		return fmt.Errorf("user_service.Create: %w", errs.ErrUserNotFound)
 	}
 
 	passwordHash, err := password.Hash(user.Password)
@@ -118,15 +119,7 @@ func (u *UserService) GetAll(ctx context.Context) ([]models.User, error) {
 		return []models.User{}, fmt.Errorf("user_service.GetAll: %w", err)
 	}
 
-	// get active users
-	activeUsers := make([]models.User, 0, len(allUsers))
-	for _, v := range allUsers {
-		if v.DeletedAt.IsZero() {
-			activeUsers = append(activeUsers, v)
-		}
-	}
-
-	return activeUsers, nil
+	return allUsers, nil
 }
 
 func (u *UserService) GetByID(ctx context.Context, id int) (*models.User, error) {
@@ -160,17 +153,33 @@ func (u *UserService) Update(ctx context.Context, user models.User) error {
 	return nil
 }
 
+func (u *UserService) UpdateUserRole(ctx context.Context, user models.User) error {
+	// validation
+	user.Role = strings.TrimSpace(user.Role)
+	if user.Role == "" {
+		return fmt.Errorf("user_service.UpdateUserRole: %w", errs.ErrBadRequestBody)
+	}
+
+	// updating
+	err := u.userR.UpdateUserRole(ctx, user)
+	if err != nil {
+		return fmt.Errorf("user_service.UpdateUserRole: %w", err)
+	}
+
+	return nil
+}
+
 func (u *UserService) DeleteUser(ctx context.Context, id int) error {
 	// delete user
 	err := u.userR.DeleteByID(ctx, id)
 	if err != nil {
-		return fmt.Errorf("user_service.DeleteByID: %w", err)
+		return fmt.Errorf("user_service.DeleteUser: %w", err)
 	}
 
 	// delete user orders
 	err = u.orderR.DeleteByUserID(ctx, id)
 	if err != nil && !errors.Is(err, errs.ErrNotFound) {
-		return fmt.Errorf("user_service.DeleteByID: %w", err)
+		return fmt.Errorf("user_service.DeleteUser: %w", err)
 	}
 
 	return nil
