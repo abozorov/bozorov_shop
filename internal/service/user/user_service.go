@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"math/rand"
 	"strconv"
 	"strings"
@@ -48,11 +47,13 @@ func NewUserService(
 }
 
 type sendOtp struct {
-	code int
-	user *models.User
+	code   int
+	user   *models.User
+	sendAt time.Time
 }
 
 func (u *UserService) Verification(ctx context.Context, request models.Verification) error {
+	request.CreatedAt = time.Now()
 	u.verification <- &request
 	return nil
 }
@@ -95,8 +96,9 @@ func (u *UserService) Register(ctx context.Context, request models.RegisterReque
 	}
 
 	u.memCache.Set(user.Email, sendOtp{
-		code: otpCode,
-		user: &user,
+		code:   otpCode,
+		user:   &user,
+		sendAt: time.Now(),
 	}, cache.DefaultExpiration)
 	verificationCtx, cancle := context.WithTimeout(context.Background(), time.Minute*5-time.Second)
 	defer cancle()
@@ -104,14 +106,15 @@ func (u *UserService) Register(ctx context.Context, request models.RegisterReque
 	for {
 		select {
 		case <-verificationCtx.Done():
-			user, _ := u.memCache.Get(user.Email)
-			log.Println(user.(sendOtp).code, *user.(sendOtp).user)
 
 			return fmt.Errorf("user_service.Register: %w", errs.ErrTimeoutExceeded)
 		case verr := <-u.verification:
 			user, ok := u.memCache.Get(verr.Email)
-			if !ok {
-				u.verification <- verr
+			if !ok || verr.CreatedAt.Sub(user.(sendOtp).sendAt) < 0 {
+				now := time.Now()
+				if now.Sub(verr.CreatedAt) < time.Minute*5 {
+					u.verification <- verr
+				}
 				continue
 			}
 
