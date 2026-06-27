@@ -4,29 +4,55 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/abozorov/bozorov_shop/internal/models"
 	orderrepo "github.com/abozorov/bozorov_shop/internal/repo/order"
 	userrepo "github.com/abozorov/bozorov_shop/internal/repo/user"
+	emailsender "github.com/abozorov/bozorov_shop/pkg/email_sender"
 	"github.com/abozorov/bozorov_shop/pkg/errs"
 	"github.com/abozorov/bozorov_shop/pkg/jwt"
 	"github.com/abozorov/bozorov_shop/pkg/password"
+	"github.com/patrickmn/go-cache"
 )
 
 type UserService struct {
-	userR  *userrepo.UserRepo
-	orderR *orderrepo.OrderRepo
-	jwt    *jwt.JWTSecret
+	userR        *userrepo.UserRepo
+	orderR       *orderrepo.OrderRepo
+	jwt          *jwt.JWTSecret
+	memCache     *cache.Cache
+	verification chan *models.Verification
+	emailSender  *emailsender.EmailSender
 }
 
-func NewUserService(userR *userrepo.UserRepo, orderR *orderrepo.OrderRepo, jwt *jwt.JWTSecret) *UserService {
+func NewUserService(
+	userR *userrepo.UserRepo,
+	orderR *orderrepo.OrderRepo,
+	jwt *jwt.JWTSecret,
+	memCache *cache.Cache,
+	verification chan *models.Verification,
+	emailsender *emailsender.EmailSender) *UserService {
+
 	return &UserService{
-		userR:  userR,
-		orderR: orderR,
-		jwt:    jwt,
+		userR:        userR,
+		orderR:       orderR,
+		jwt:          jwt,
+		memCache:     memCache,
+		verification: verification,
+		emailSender:  emailsender,
 	}
 }
+
+type sendOtp struct {
+	code int
+	user *models.User
+}
+
+// func (u *UserService) Verification(ctx context.Context, request models.RegisterRequest) error {
+// }
 
 func (u *UserService) Register(ctx context.Context, request models.RegisterRequest) error {
 	err := request.Validate()
@@ -55,12 +81,37 @@ func (u *UserService) Register(ctx context.Context, request models.RegisterReque
 		Role:     models.UserRole,
 	}
 
-	err = u.userR.Add(ctx, user)
+	// saving user in memCach & waiting user for verification
+	// generate otp code & send user
+	otpCode := rand.Int()%100000 + 100000
+
+	// sending email
+	err = u.emailSender.SendMail(user.Email, strconv.Itoa(otpCode))
 	if err != nil {
 		return fmt.Errorf("user_service.Register: %w", err)
 	}
 
-	return nil
+	u.memCache.Set(user.Email, sendOtp{
+		code: otpCode,
+		user: &user,
+	}, cache.DefaultExpiration)
+	verificationCtx, cancle := context.WithTimeout(context.Background(), time.Minute*5-time.Second)
+	defer cancle()
+
+	select {
+	case <-verificationCtx.Done():
+		return fmt.Errorf("user_service.Register: %w", errs.ErrTimeoutExceeded)
+	case verr := <-u.verification:
+		user, ok := u.memCache.Get(verr.Email)
+		if !ok {
+			return fmt.Errorf("user_service.Register: %w", errs.ErrBadRequest)
+		}
+		err = u.userR.Add(ctx, user.(models.User))
+		if err != nil {
+			return fmt.Errorf("user_service.Register: %w", err)
+		}
+		return nil
+	}
 }
 
 func (u *UserService) Login(ctx context.Context, request models.LoginRequest) (token string, err error) {

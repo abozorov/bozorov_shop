@@ -10,6 +10,14 @@ type Config struct {
 	ServerConfig
 	DBConfig
 	JWTSecret
+	EmailSenderConfig
+}
+
+type EmailSenderConfig struct {
+	Email         string `env:"EMAIL"`
+	EmailPassword string `env:"EMAILPASSWORD"`
+	EmailHost     string `env:"EMAILHOST"`
+	EmailPort     string `env:"EMAILPORT"`
 }
 
 type JWTSecret struct {

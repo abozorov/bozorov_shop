@@ -56,6 +56,7 @@ func newResponseUser(u models.User) *responseUser {
 	}
 }
 
+
 func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	var req models.RegisterRequest
@@ -74,6 +75,11 @@ func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusCreated)
 	w.Write([]byte("User Registered"))
+}
+
+// принимаем код, после проверяяем и создаем запрос для похранения в БД
+func (h *UserHandler) Verify(w http.ResponseWriter, r *http.Request) {
+
 }
 
 func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
