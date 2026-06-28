@@ -226,6 +226,23 @@ func (u *UserRepo) Update(ctx context.Context, user models.User) error {
 	return nil
 }
 
+func (u *UserRepo) UpdatePassword(ctx context.Context, user models.User) error {
+	const query = `
+		UPDATE users
+		SET password_hash = $2
+		WHERE id = $1 AND deleted_at IS null;
+	`
+
+	err := execAnalysis(u.db.Exec(ctx, query,
+		user.ID,
+		user.Password,
+	))
+
+	if err != nil {
+		return fmt.Errorf("user_repo.UpdatePassword: %w", errs.PostgresToErrs(err))
+	}
+	return nil
+}
 
 func (u *UserRepo) UpdateUserRole(ctx context.Context, user models.User) error {
 	const query = `

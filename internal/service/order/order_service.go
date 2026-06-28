@@ -108,7 +108,8 @@ func (o *OrderService) Update(ctx context.Context, order models.Order) error {
 	if err != nil {
 		return fmt.Errorf("order_service.Update: %w", err)
 	}
-	if oldOrder.UserID != order.UserID {
+	if oldOrder.UserID != order.UserID ||
+		(oldOrder.Status == models.OrderStatusNew && order.Status == models.OrderStatusCancle) {
 		return fmt.Errorf("order_service.Update: %w", errs.ErrBadRequest)
 	}
 
@@ -135,7 +136,7 @@ func (o *OrderService) CancleOrder(ctx context.Context, id int) error {
 	}
 
 	// check user for orderr
-	if order.UserID != userID {
+	if order.UserID != userID || order.Status != models.OrderStatusNew {
 		return fmt.Errorf("order_service.CancleOrder: %w", errs.ErrBadRequest)
 	}
 

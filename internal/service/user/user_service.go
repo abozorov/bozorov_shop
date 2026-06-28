@@ -207,6 +207,31 @@ func (u *UserService) GetByID(ctx context.Context, id int) (*models.User, error)
 	return user, nil
 }
 
+func (u *UserService) GetProfile(ctx context.Context, id int) (*models.Profile, error) {
+	// get all users
+	user, err := u.userR.GetByID(ctx, id)
+	if err != nil {
+		return &models.Profile{}, fmt.Errorf("user_service.GetProfile: %w", err)
+	}
+
+	// get active users
+	if !user.DeletedAt.IsZero() {
+		return &models.Profile{}, fmt.Errorf("user_service.GetProfile: %w", errs.ErrUserNotFound)
+	}
+
+	// get orders
+	orders, err := u.orderR.GetAllByUserID(ctx, id)
+	if err != nil {
+		return &models.Profile{}, fmt.Errorf("user_service.GetProfile: %w", err)
+	}
+	// return profile
+	prof := models.NewProfile()
+	prof.User = user
+	prof.UserOrders = orders
+	return prof, nil
+
+}
+
 func (u *UserService) Update(ctx context.Context, user models.User) error {
 	// validation
 	user.Name = strings.TrimSpace(user.Name)
@@ -221,6 +246,33 @@ func (u *UserService) Update(ctx context.Context, user models.User) error {
 		return fmt.Errorf("user_service.Update: %w", err)
 	}
 
+	return nil
+}
+
+func (u *UserService) UpdatePassword(ctx context.Context, pass models.UpdatePassword) error {
+	// get all users
+	user, err := u.userR.GetByID(ctx, pass.UserID)
+	if err != nil {
+		return fmt.Errorf("user_service.UpdatePassword: %w", err)
+	}
+
+	// check old password
+	err = password.Compare(user.Password, pass.OldPassword)
+	if err != nil {
+		return fmt.Errorf("user_service.UpdatePassword: %w", err)
+	}
+
+	// hash password
+	user.Password, err = password.Hash(pass.NewPassword)
+	if err != nil {
+		return fmt.Errorf("user_service.Register: %w", err)
+	}
+
+	// update password
+	err = u.userR.UpdatePassword(ctx, *user)
+	if err != nil {
+		return fmt.Errorf("user_service.UpdatePassword: %w", err)
+	}
 	return nil
 }
 

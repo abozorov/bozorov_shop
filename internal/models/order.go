@@ -5,6 +5,13 @@ import (
 	"time"
 )
 
+var (
+	OrderStatusNew        = "new"
+	OrderStatusInProgress = "in_progress"
+	OrderStatusDone       = "done"
+	OrderStatusCancle     = "cancled"
+)
+
 type Order struct {
 	ID        int
 	UserID    int
@@ -19,10 +26,10 @@ func (o *Order) Validate(create bool) bool {
 	o.Status = strings.TrimSpace(o.Status)
 
 	validStatuses := map[string]bool{
-		"new":         true,
-		"in_progress": true,
-		"done":        true,
-		"cancled":     true,
+		OrderStatusNew:        true,
+		OrderStatusInProgress: true,
+		OrderStatusDone:       true,
+		OrderStatusCancle:     true,
 	}
 
 	return (o.ID > 0 || create) &&

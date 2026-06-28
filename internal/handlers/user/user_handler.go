@@ -56,6 +56,42 @@ func newResponseUser(u models.User) *responseUser {
 	}
 }
 
+type responseOrder struct {
+	ID        int     `json:"id"`
+	UserID    int     `json:"user_id"`
+	Product   string  `json:"product"`
+	Price     float64 `json:"price"`
+	Status    string  `json:"status"`
+	CreatedAt string  `json:"created_at"`
+}
+
+func newResponseOrder(o models.Order) *responseOrder {
+	return &responseOrder{
+		ID:        o.ID,
+		UserID:    o.UserID,
+		Product:   o.Product,
+		Price:     o.Price,
+		Status:    o.Status,
+		CreatedAt: o.CreatedAt.Format(time.RFC822Z),
+	}
+}
+
+type responseProfile struct {
+	*responseUser
+	UserOrders []responseOrder `json:"orders"`
+}
+
+func newResponseProfile(prof models.Profile) *responseProfile {
+	orders := make([]responseOrder, 0, 1000)
+	for _, v := range prof.UserOrders {
+		orders = append(orders, *newResponseOrder(v))
+	}
+	return &responseProfile{
+		responseUser: newResponseUser(*prof.User),
+		UserOrders:   orders,
+	}
+}
+
 func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	var req models.RegisterRequest
@@ -177,6 +213,36 @@ func (h *UserHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (h *UserHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	// get id
+	id, ok := r.Context().Value(mycontext.UserIDKey).(int)
+	if !ok {
+		h.logger.Error("user_handler.GetMe: ", zap.String("error", errs.ErrIncorrectLoginOrPassword.Error()))
+		errs.ErrsToHttp(w, errs.ErrIncorrectLoginOrPassword)
+		return
+	}
+
+	// get by id
+	prof, err := h.service.GetProfile(r.Context(), id)
+	if err != nil {
+		h.logger.Error("user_handler.GetMe: ", zap.String("error", err.Error()))
+		errs.ErrsToHttp(w, err)
+		return
+	}
+
+	// transform models.User -> user
+	resp := *newResponseProfile(*prof)
+
+	// write response
+	err = json.NewEncoder(w).Encode(resp)
+	if err != nil {
+		h.logger.Error("user_handler.GetMe: ", zap.String("error", err.Error()))
+		errs.ErrsToHttp(w, err)
+	}
+}
+
 func (h *UserHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
@@ -208,6 +274,36 @@ func (h *UserHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Write([]byte("User updated"))
+}
+
+func (h *UserHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	// get id
+	id, ok := r.Context().Value(mycontext.UserIDKey).(int)
+	if !ok {
+		h.logger.Error("user_handler.UpdateMe: ", zap.String("error", errs.ErrIncorrectLoginOrPassword.Error()))
+		errs.ErrsToHttp(w, errs.ErrIncorrectLoginOrPassword)
+		return
+	}
+
+	// get user
+	pass := models.UpdatePassword{}
+	err := json.NewDecoder(r.Body).Decode(&pass)
+	if err != nil {
+		errs.ErrsToHttp(w, errs.ErrBadRequestBody)
+		return
+	}
+	pass.UserID = id
+
+	// creating & transform models.User -> user
+	err = h.service.UpdatePassword(r.Context(), pass)
+	if err != nil {
+		h.logger.Error("user_handler.UpdateMe: ", zap.String("error", err.Error()))
+		errs.ErrsToHttp(w, err)
+		return
+	}
+	w.Write([]byte("User password updated"))
 }
 
 func (h *UserHandler) UpdateUserRole(w http.ResponseWriter, r *http.Request) {

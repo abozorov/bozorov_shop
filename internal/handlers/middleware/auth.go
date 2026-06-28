@@ -47,7 +47,7 @@ func (m *Middleware) AuthAdmin(next http.Handler) http.Handler {
 			return
 		}
 
-		if user.Role != "admin" {
+		if user.Role != "admin" || !user.DeletedAt.IsZero() {
 			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 			return
 		}
@@ -70,6 +70,16 @@ func (m *Middleware) Auth(next http.Handler) http.Handler {
 		token = strings.TrimPrefix(token, "Bearer ")
 		claims, err := m.jwt.ParseToken(token)
 		if err != nil {
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			return
+		}
+
+		user, err := m.repo.GetByID(r.Context(), claims.UserID)
+		if err != nil {
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+		if !user.DeletedAt.IsZero() {
 			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 			return
 		}
