@@ -17,12 +17,13 @@ import (
 	userhandler "github.com/abozorov/bozorov_shop/internal/handlers/user"
 	"github.com/abozorov/bozorov_shop/internal/models"
 	orderrepo "github.com/abozorov/bozorov_shop/internal/repo/order"
+	refreshtokenrepo "github.com/abozorov/bozorov_shop/internal/repo/refresh_token"
 	userrepo "github.com/abozorov/bozorov_shop/internal/repo/user"
 	orderservice "github.com/abozorov/bozorov_shop/internal/service/order"
 	userservice "github.com/abozorov/bozorov_shop/internal/service/user"
-	emailsender "github.com/abozorov/bozorov_shop/pkg/email_sender"
 	"github.com/abozorov/bozorov_shop/pkg/jwt"
 	"github.com/abozorov/bozorov_shop/pkg/logger"
+	mailsender "github.com/abozorov/bozorov_shop/pkg/mail_sender"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/patrickmn/go-cache"
 	"go.uber.org/zap"
@@ -65,7 +66,7 @@ func main() {
 	verification := make(chan *models.Verification, 1000000)
 
 	// make email sender
-	emailSender := emailsender.NewEmailSender(
+	mailSender := mailsender.NewMailSender(
 		cfg.Email,
 		cfg.EmailPassword,
 		cfg.EmailHost,
@@ -75,14 +76,16 @@ func main() {
 	// create layers
 	userRepo := userrepo.NewUserRepo(db)
 	orderRepo := orderrepo.NewOrderRepo(db)
+	tokenRepo := refreshtokenrepo.NewRefreshTokenRepo(db)
 
 	userService := userservice.NewUserService(
 		userRepo,
 		orderRepo,
+		tokenRepo,
 		sJWT,
 		memCache,
 		verification,
-		emailSender,
+		mailSender,
 	)
 	orderService := orderservice.NewOrderService(userRepo, orderRepo)
 

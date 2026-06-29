@@ -112,6 +112,28 @@ func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("User Registered"))
 }
 
+func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
+	var req models.LoginRequest
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		h.logger.Error("user_handler.Login: ", zap.String("error", err.Error()))
+		errs.ErrsToHttp(w, errs.ErrBadRequestBody)
+		return
+	}
+
+	tokens, err := h.service.Login(r.Context(), req)
+	if err != nil {
+		h.logger.Error("user_handler.Login: ", zap.String("error", err.Error()))
+		errs.ErrsToHttp(w, err)
+		return
+	}
+
+	if err = json.NewEncoder(w).Encode(tokens); err != nil {
+		h.logger.Error("user_handler.Login: ", zap.String("error", err.Error()))
+		errs.ErrsToHttp(w, errs.ErrSomethingWentWrong)
+	}
+}
+
 // принимаем код, после проверяяем и создаем запрос для похранения в БД
 func (h *UserHandler) Verify(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
@@ -134,26 +156,53 @@ func (h *UserHandler) Verify(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("send for verrification"))
 }
 
-func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
-	var req models.LoginRequest
-	err := json.NewDecoder(r.Body).Decode(&req)
+func (h *UserHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	// get tokens
+	rToken := models.Tokens{}
+	err := json.NewDecoder(r.Body).Decode(&rToken)
 	if err != nil {
-		h.logger.Error("user_handler.Login: ", zap.String("error", err.Error()))
 		errs.ErrsToHttp(w, errs.ErrBadRequestBody)
 		return
 	}
 
-	token, err := h.service.Login(r.Context(), req)
+	// try refresh tokens
+	tokens, err := h.service.RefreshTokens(r.Context(), rToken.Refresh)
 	if err != nil {
-		h.logger.Error("user_handler.Login: ", zap.String("error", err.Error()))
+		h.logger.Error("user_handler.RefreshToken: ", zap.String("error", err.Error()))
 		errs.ErrsToHttp(w, err)
 		return
 	}
 
-	if err = json.NewEncoder(w).Encode(map[string]string{"token": token}); err != nil {
-		h.logger.Error("user_handler.Login: ", zap.String("error", err.Error()))
-		errs.ErrsToHttp(w, errs.ErrSomethingWentWrong)
+	// write response
+	err = json.NewEncoder(w).Encode(tokens)
+	if err != nil {
+		h.logger.Error("user_handler.RefreshToken: ", zap.String("error", err.Error()))
+		errs.ErrsToHttp(w, err)
 	}
+}
+
+func (h *UserHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	// get tokens
+	tokens := models.Tokens{}
+	err := json.NewDecoder(r.Body).Decode(&tokens)
+	if err != nil {
+		errs.ErrsToHttp(w, errs.ErrBadRequestBody)
+		return
+	}
+
+	// try logout
+	err = h.service.Logout(r.Context(), tokens)
+	if err != nil {
+		h.logger.Error("user_handler.Logout: ", zap.String("error", err.Error()))
+		errs.ErrsToHttp(w, err)
+		return
+	}
+
+	w.Write([]byte("logout success"))
 }
 
 // Admin

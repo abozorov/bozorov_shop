@@ -1,10 +1,10 @@
-package emailsender
+package mailsender
 
 import (
 	"net/smtp"
 )
 
-type EmailSender struct {
+type MailSender struct {
 	from     string
 	password string
 	smtpHost string
@@ -12,9 +12,9 @@ type EmailSender struct {
 	auth     smtp.Auth
 }
 
-func NewEmailSender(from, password, smtpHost, smtpPort string) *EmailSender {
+func NewMailSender(from, password, smtpHost, smtpPort string) *MailSender {
 
-	return &EmailSender{
+	return &MailSender{
 		from:     from,
 		password: password,
 		smtpHost: smtpHost,
@@ -23,7 +23,7 @@ func NewEmailSender(from, password, smtpHost, smtpPort string) *EmailSender {
 	}
 }
 
-func (e *EmailSender) SendMail(to, message string) error {
+func (e *MailSender) SendMail(to, message string) error {
 	subject := "Subject: Mail Autentification!\n"
 	mime := "MIME-version: 1.0;\nContent-Type: text/plain; charset=\"UTF-8\";\n\n"
 	body := "Код для верификации: " + message

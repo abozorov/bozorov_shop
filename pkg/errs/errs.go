@@ -34,6 +34,7 @@ var (
 	// Unautorized
 	ErrIncorrectLoginOrPassword = errors.New("incorrect login or password")
 	ErrIncorrectPassword        = errors.New("incorrect password")
+	ErrInvalidToken             = errors.New("token is invalid")
 
 	// NotFound
 	ErrNotFound       = errors.New("not found")
@@ -82,6 +83,8 @@ func ErrsToHttp(w http.ResponseWriter, err error) {
 		http.Error(w, ErrIncorrectLoginOrPassword.Error(), http.StatusUnauthorized)
 	case errors.Is(err, ErrIncorrectPassword):
 		http.Error(w, ErrIncorrectPassword.Error(), http.StatusUnauthorized)
+	case errors.Is(err, ErrInvalidToken):
+		http.Error(w, ErrInvalidToken.Error(), http.StatusUnauthorized)
 
 	// http.StatusInternalServerError
 	default:

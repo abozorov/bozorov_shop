@@ -11,38 +11,43 @@ import (
 
 	"github.com/abozorov/bozorov_shop/internal/models"
 	orderrepo "github.com/abozorov/bozorov_shop/internal/repo/order"
+	refreshtokenrepo "github.com/abozorov/bozorov_shop/internal/repo/refresh_token"
 	userrepo "github.com/abozorov/bozorov_shop/internal/repo/user"
-	emailsender "github.com/abozorov/bozorov_shop/pkg/email_sender"
 	"github.com/abozorov/bozorov_shop/pkg/errs"
 	"github.com/abozorov/bozorov_shop/pkg/jwt"
+	mailsender "github.com/abozorov/bozorov_shop/pkg/mail_sender"
 	"github.com/abozorov/bozorov_shop/pkg/password"
+	refreshtoken "github.com/abozorov/bozorov_shop/pkg/refresh_token"
 	"github.com/patrickmn/go-cache"
 )
 
 type UserService struct {
-	userR        *userrepo.UserRepo
-	orderR       *orderrepo.OrderRepo
-	jwt          *jwt.JWTSecret
-	memCache     *cache.Cache
-	verification chan *models.Verification
-	emailSender  *emailsender.EmailSender
+	userR            *userrepo.UserRepo
+	orderR           *orderrepo.OrderRepo
+	refreshTokenRepo *refreshtokenrepo.RefreshTokenRepo
+	jwt              *jwt.JWTSecret
+	memCache         *cache.Cache
+	verification     chan *models.Verification
+	mailSender       *mailsender.MailSender
 }
 
 func NewUserService(
 	userR *userrepo.UserRepo,
 	orderR *orderrepo.OrderRepo,
+	refreshTokenRepo *refreshtokenrepo.RefreshTokenRepo,
 	jwt *jwt.JWTSecret,
 	memCache *cache.Cache,
 	verification chan *models.Verification,
-	emailsender *emailsender.EmailSender) *UserService {
+	mailsender *mailsender.MailSender) *UserService {
 
 	return &UserService{
-		userR:        userR,
-		orderR:       orderR,
-		jwt:          jwt,
-		memCache:     memCache,
-		verification: verification,
-		emailSender:  emailsender,
+		userR:            userR,
+		orderR:           orderR,
+		refreshTokenRepo: refreshTokenRepo,
+		jwt:              jwt,
+		memCache:         memCache,
+		verification:     verification,
+		mailSender:       mailsender,
 	}
 }
 
@@ -86,10 +91,10 @@ func (u *UserService) Register(ctx context.Context, request models.RegisterReque
 
 	// saving user in memCach & waiting user for verification
 	// generate otp code & send user
-	otpCode := rand.Int()%100000 + 100000
+	otpCode := rand.Int()%899999 + 100000
 
 	// sending email
-	err = u.emailSender.SendMail(user.Email, strconv.Itoa(otpCode))
+	err = u.mailSender.SendMail(user.Email, strconv.Itoa(otpCode))
 	if err != nil {
 		return fmt.Errorf("user_service.Register: %w", err)
 	}
@@ -103,6 +108,7 @@ func (u *UserService) Register(ctx context.Context, request models.RegisterReque
 		user:   &user,
 		sendAt: time.Now(),
 	}, cache.DefaultExpiration)
+
 	verificationCtx, cancle := context.WithTimeout(context.Background(), time.Minute*5-time.Second)
 	defer cancle()
 
@@ -112,6 +118,8 @@ func (u *UserService) Register(ctx context.Context, request models.RegisterReque
 
 			return fmt.Errorf("user_service.Register: %w", errs.ErrTimeoutExceeded)
 		case verr := <-u.verification:
+			defer u.memCache.Delete(verr.Email)
+
 			user, ok := u.memCache.Get(verr.Email)
 			if !ok || verr.CreatedAt.Sub(user.(sendOtp).sendAt) < 0 {
 				now := time.Now()
@@ -134,32 +142,124 @@ func (u *UserService) Register(ctx context.Context, request models.RegisterReque
 	}
 }
 
-func (u *UserService) Login(ctx context.Context, request models.LoginRequest) (token string, err error) {
-	err = request.Validate()
+func (u *UserService) Login(ctx context.Context, request models.LoginRequest) (*models.Tokens, error) {
+	err := request.Validate()
 	if err != nil {
-		return "", fmt.Errorf("user_service.Login: %w", err)
+		return &models.Tokens{}, fmt.Errorf("user_service.Login: %w", err)
 	}
 
+	// get user by email
 	user, err := u.userR.GetByEmail(ctx, request.Email)
 	if err != nil {
-		return "", fmt.Errorf("user_service.Login: %w", err)
+		return &models.Tokens{}, fmt.Errorf("user_service.Login: %w", err)
 	}
 
+	// check for delete
 	if !user.DeletedAt.IsZero() {
-		return "", fmt.Errorf("user_service.Login: %w", errs.ErrUserNotFound)
+		return &models.Tokens{}, fmt.Errorf("user_service.Login: %w", errs.ErrUserNotFound)
 	}
 
+	// compare password
 	err = password.Compare(user.Password, request.Password)
 	if err != nil {
-		return "", fmt.Errorf("user_service.Login: %w", err)
+		return &models.Tokens{}, fmt.Errorf("user_service.Login: %w", err)
 	}
 
-	token, err = u.jwt.GenerateToken(user.ID, user.Email, user.Role)
+	// generate tokens
+	jwtToken, err := u.jwt.GenerateToken(user.ID, user.Email)
 	if err != nil {
-		return "", fmt.Errorf("user_service.Login: %w", err)
+		return &models.Tokens{}, fmt.Errorf("user_service.Login: %w", err)
+	}
+	refreshToken := refreshtoken.Generate()
+	if exist, _ := u.refreshTokenRepo.ExistByUserID(ctx, user.ID); exist {
+		err = u.refreshTokenRepo.DeleteByUserID(ctx, user.ID)
+		if err != nil {
+			return &models.Tokens{}, fmt.Errorf("user_service.Login: %w", err)
+		}
+	}
+	err = u.refreshTokenRepo.Create(ctx, models.RefreshToken{
+		UserID:    user.ID,
+		TokenHash: refreshtoken.HashRefreshToken(refreshToken),
+		ExpiresAt: time.Now().Add(time.Hour * 24 * 7),
+		CreatedAt: time.Now(),
+	})
+	if err != nil {
+		return &models.Tokens{}, fmt.Errorf("user_service.Login: %w", err)
 	}
 
-	return token, nil
+	// return tokens
+	return &models.Tokens{
+		Refresh: refreshToken,
+		JWT:     jwtToken,
+	}, nil
+}
+
+func (u *UserService) RefreshTokens(ctx context.Context, refreshToken string) (*models.Tokens, error) {
+	// hash refresh token
+	refreshToken = refreshtoken.HashRefreshToken(refreshToken)
+
+	// if exist, _ := u.refreshTokenRepo.ExistByToken(ctx, refreshToken); !exist {
+	// 	return &models.Tokens{}, fmt.Errorf("user_service.RefreshTokens: %w", errs.ErrBadRequest)
+	// }
+
+	// get token
+	rToken, err := u.refreshTokenRepo.GetByTokenHash(ctx, refreshToken)
+	if err != nil {
+		return &models.Tokens{}, fmt.Errorf("user_service.RefreshTokens: %w", errs.ErrInvalidToken)
+	}
+
+	// check token expiration date
+	if rToken.ExpiresAt.Second() < time.Now().Second() {
+		return &models.Tokens{}, fmt.Errorf("user_service.RefreshTokens: %w", errs.ErrInvalidToken)
+	}
+
+	// get user
+	user, err := u.userR.GetByID(ctx, rToken.UserID)
+	if err != nil {
+		return &models.Tokens{}, fmt.Errorf("user_service.RefreshTokens: %w", err)
+	}
+
+	// check user for delete
+	if !user.DeletedAt.IsZero() {
+		return &models.Tokens{}, fmt.Errorf("user_service.RefreshTokens: %w", errs.ErrUserNotFound)
+	}
+
+	// create tokens
+	tokens := &models.Tokens{}
+	tokens.Refresh = refreshtoken.Generate()
+	tokens.JWT, err = u.jwt.GenerateToken(user.ID, user.Email)
+	if err != nil {
+		return &models.Tokens{}, fmt.Errorf("user_service.RefreshTokens: %w", err)
+	}
+	rToken.TokenHash = refreshtoken.HashRefreshToken(tokens.Refresh)
+	rToken.CreatedAt = time.Now()
+	rToken.ExpiresAt = rToken.CreatedAt.Add(time.Hour * 24 * 7)
+
+	// update refresh token
+	err = u.refreshTokenRepo.Update(ctx, *rToken)
+	if err != nil {
+		return &models.Tokens{}, fmt.Errorf("user_service.RefreshTokens: %w", err)
+	}
+
+	// send tokens
+	return tokens, nil
+}
+
+func (u *UserService) Logout(ctx context.Context, tokens models.Tokens) error {
+	// hash refresh token
+	tokens.Refresh = refreshtoken.HashRefreshToken(tokens.Refresh)
+
+	// look for existense
+	if exist, _ := u.refreshTokenRepo.ExistByToken(ctx, tokens.Refresh); !exist {
+		return fmt.Errorf("user_service.Logout: %w", errs.ErrInvalidToken)
+	}
+
+	// delete token
+	err := u.refreshTokenRepo.DeleteByToken(ctx, tokens.Refresh)
+	if err != nil {
+		return fmt.Errorf("user_service.Logout: %w", err)
+	}
+	return nil
 }
 
 func (u *UserService) Create(ctx context.Context, user models.User) error {
