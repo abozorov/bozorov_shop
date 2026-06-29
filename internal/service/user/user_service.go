@@ -198,10 +198,6 @@ func (u *UserService) RefreshTokens(ctx context.Context, refreshToken string) (*
 	// hash refresh token
 	refreshToken = refreshtoken.HashRefreshToken(refreshToken)
 
-	// if exist, _ := u.refreshTokenRepo.ExistByToken(ctx, refreshToken); !exist {
-	// 	return &models.Tokens{}, fmt.Errorf("user_service.RefreshTokens: %w", errs.ErrBadRequest)
-	// }
-
 	// get token
 	rToken, err := u.refreshTokenRepo.GetByTokenHash(ctx, refreshToken)
 	if err != nil {
