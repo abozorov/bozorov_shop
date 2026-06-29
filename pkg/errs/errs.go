@@ -30,6 +30,8 @@ var (
 	// Verify
 	ErrVerifyingFailed     = errors.New("Verifying failed")
 	ErrUserNotBeenVerified = errors.New("email has not been verified yet")
+	ErrIncorrectOTPCode    = errors.New("incorrect OTP code")
+	ErrToManyAttempt       = errors.New("user is too many attempts")
 
 	// Unautorized
 	ErrIncorrectLoginOrPassword = errors.New("incorrect login or password")
@@ -69,10 +71,14 @@ func ErrsToHttp(w http.ResponseWriter, err error) {
 		http.Error(w, ErrVerifyingFailed.Error(), http.StatusBadRequest)
 	case errors.Is(err, ErrUserNotBeenVerified):
 		http.Error(w, ErrUserNotBeenVerified.Error(), http.StatusBadRequest)
+	case errors.Is(err, ErrIncorrectOTPCode):
+		http.Error(w, ErrIncorrectOTPCode.Error(), http.StatusBadRequest)
 
 	// http.StatusTooManyRequests
 	case errors.Is(err, ErrTooManyRequests):
 		http.Error(w, ErrTooManyRequests.Error(), http.StatusTooManyRequests)
+	case errors.Is(err, ErrToManyAttempt):
+		http.Error(w, ErrToManyAttempt.Error(), http.StatusTooManyRequests)
 
 	// http.StatusGatewayTimeout
 	case errors.Is(err, ErrTimeoutExceeded):

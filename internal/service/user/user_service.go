@@ -52,14 +52,45 @@ func NewUserService(
 }
 
 type sendOtp struct {
-	code   int
-	user   *models.User
-	sendAt time.Time
+	code       int
+	user       *models.User
+	attemptOTP *int
 }
 
-func (u *UserService) Verification(ctx context.Context, request models.Verification) error {
-	request.CreatedAt = time.Now()
-	u.verification <- &request
+func (u *UserService) Verification(ctx context.Context, req models.Verification) error {
+	// check mem cash for exist
+	exists, err := u.userR.ExistsByEmail(ctx, req.Email)
+	if err != nil {
+		return fmt.Errorf("user_service.Verification: %w", err)
+	}
+	if exists {
+		return fmt.Errorf("user_service.Verification: %w", errs.ErrUserAlreadyExists)
+	}
+
+	// check mem cash for exist
+	user, ok := u.memCache.Get(req.Email)
+	if !ok {
+		return fmt.Errorf("user_service.Verification: %w", errs.ErrVerifyingFailed)
+	}
+	defer func() {
+		*user.(sendOtp).attemptOTP++
+	}()
+
+	if *user.(sendOtp).attemptOTP > 2 {
+		u.memCache.Delete(req.Email)
+		return fmt.Errorf("user_service.Verification: %w", errs.ErrToManyAttempt)
+	}
+
+	if user.(sendOtp).code != req.Code {
+		return fmt.Errorf("user_service.Verification: %w", errs.ErrIncorrectOTPCode)
+	}
+
+	err = u.userR.Add(ctx, *user.(sendOtp).user)
+	if err != nil {
+		return fmt.Errorf("user_service.Register: %w", err)
+	}
+	u.memCache.Delete(req.Email)
+
 	return nil
 }
 
@@ -69,6 +100,7 @@ func (u *UserService) Register(ctx context.Context, request models.RegisterReque
 		return fmt.Errorf("user_service.Register: %w", err)
 	}
 
+	// check for exist in db
 	exists, err := u.userR.ExistsByEmail(ctx, request.Email)
 	if err != nil {
 		return fmt.Errorf("user_service.Register: %w", err)
@@ -77,11 +109,17 @@ func (u *UserService) Register(ctx context.Context, request models.RegisterReque
 		return fmt.Errorf("user_service.Register: %w", errs.ErrUserAlreadyExists)
 	}
 
+	// check for exist in memcache
+	_, ok := u.memCache.Get(request.Email)
+	if ok {
+		return fmt.Errorf("user_service.Register: %w", errs.ErrUserNotBeenVerified)
+	}
+
+	//
 	passwordHash, err := password.Hash(request.Password)
 	if err != nil {
 		return fmt.Errorf("user_service.Register: %w", err)
 	}
-
 	user := models.User{
 		Name:     request.Name,
 		Email:    request.Email,
@@ -92,54 +130,24 @@ func (u *UserService) Register(ctx context.Context, request models.RegisterReque
 	// saving user in memCach & waiting user for verification
 	// generate otp code & send user
 	otpCode := rand.Int()%899999 + 100000
+	attempt := 0
+
+	// save in cache
+	u.memCache.Set(user.Email, sendOtp{
+		code:       otpCode,
+		user:       &user,
+		attemptOTP: &attempt,
+	}, cache.DefaultExpiration)
 
 	// sending email
 	err = u.mailSender.SendMail(user.Email, strconv.Itoa(otpCode))
 	if err != nil {
+		u.memCache.Delete(user.Email)
 		return fmt.Errorf("user_service.Register: %w", err)
 	}
 
-	_, ok := u.memCache.Get(request.Email)
-	if ok {
-		return fmt.Errorf("user_service.Register: %w", errs.ErrUserNotBeenVerified)
-	}
-	u.memCache.Set(user.Email, sendOtp{
-		code:   otpCode,
-		user:   &user,
-		sendAt: time.Now(),
-	}, cache.DefaultExpiration)
-
-	verificationCtx, cancle := context.WithTimeout(context.Background(), time.Minute*5-time.Second)
-	defer cancle()
-
-	for {
-		select {
-		case <-verificationCtx.Done():
-
-			return fmt.Errorf("user_service.Register: %w", errs.ErrTimeoutExceeded)
-		case verr := <-u.verification:
-			defer u.memCache.Delete(verr.Email)
-
-			user, ok := u.memCache.Get(verr.Email)
-			if !ok || verr.CreatedAt.Sub(user.(sendOtp).sendAt) < 0 {
-				now := time.Now()
-				if now.Sub(verr.CreatedAt) < time.Minute*5 {
-					u.verification <- verr
-				}
-				continue
-			}
-
-			if user.(sendOtp).code != verr.Code {
-				return fmt.Errorf("user_service.Register: %w", errs.ErrVerifyingFailed)
-			}
-
-			err = u.userR.Add(ctx, *user.(sendOtp).user)
-			if err != nil {
-				return fmt.Errorf("user_service.Register: %w", err)
-			}
-			return nil
-		}
-	}
+	//
+	return nil
 }
 
 func (u *UserService) Login(ctx context.Context, request models.LoginRequest) (*models.Tokens, error) {

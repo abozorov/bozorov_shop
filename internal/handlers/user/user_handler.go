@@ -108,8 +108,7 @@ func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 		errs.ErrsToHttp(w, err)
 		return
 	}
-	w.WriteHeader(http.StatusCreated)
-	w.Write([]byte("User Registered"))
+	w.Write([]byte("a verification code has been sent to your email, please check your email"))
 }
 
 func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
@@ -134,7 +133,7 @@ func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// принимаем код, после проверяяем и создаем запрос для похранения в БД
+// принимаем код, после проверяяем и создаем запрос для cохранения в БД
 func (h *UserHandler) Verify(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
@@ -153,7 +152,8 @@ func (h *UserHandler) Verify(w http.ResponseWriter, r *http.Request) {
 		errs.ErrsToHttp(w, err)
 		return
 	}
-	w.Write([]byte("send for verrification"))
+
+	w.Write([]byte("verification was successful"))
 }
 
 func (h *UserHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
