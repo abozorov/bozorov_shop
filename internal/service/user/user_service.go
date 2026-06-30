@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"math/rand"
 	"strconv"
 	"strings"
@@ -206,11 +207,12 @@ func (u *UserService) RefreshTokens(ctx context.Context, refreshToken string) (*
 	// get token
 	rToken, err := u.refreshTokenRepo.GetByTokenHash(ctx, refreshToken)
 	if err != nil {
-		return &models.Tokens{}, fmt.Errorf("user_service.RefreshTokens: %w", errs.ErrInvalidToken)
+		return &models.Tokens{}, fmt.Errorf("user_service.RefreshTokens: %w : %w", errs.ErrInvalidToken, err)
 	}
 
 	// check token expiration date
-	if rToken.ExpiresAt.Second() < time.Now().Second() {
+	if rToken.ExpiresAt.UnixMilli() < time.Now().UnixMilli() {
+		log.Println(rToken.ExpiresAt.UnixMilli(), time.Now().UnixMilli())
 		return &models.Tokens{}, fmt.Errorf("user_service.RefreshTokens: %w", errs.ErrInvalidToken)
 	}
 
