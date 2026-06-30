@@ -27,7 +27,6 @@ type UserService struct {
 	refreshTokenRepo *refreshtokenrepo.RefreshTokenRepo
 	jwt              *jwt.JWTSecret
 	memCache         *cache.Cache
-	verification     chan *models.Verification
 	mailSender       *mailsender.MailSender
 }
 
@@ -37,7 +36,6 @@ func NewUserService(
 	refreshTokenRepo *refreshtokenrepo.RefreshTokenRepo,
 	jwt *jwt.JWTSecret,
 	memCache *cache.Cache,
-	verification chan *models.Verification,
 	mailsender *mailsender.MailSender) *UserService {
 
 	return &UserService{
@@ -46,7 +44,6 @@ func NewUserService(
 		refreshTokenRepo: refreshTokenRepo,
 		jwt:              jwt,
 		memCache:         memCache,
-		verification:     verification,
 		mailSender:       mailsender,
 	}
 }

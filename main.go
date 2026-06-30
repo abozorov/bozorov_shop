@@ -15,7 +15,6 @@ import (
 	"github.com/abozorov/bozorov_shop/internal/handlers/middleware"
 	orderhandler "github.com/abozorov/bozorov_shop/internal/handlers/order"
 	userhandler "github.com/abozorov/bozorov_shop/internal/handlers/user"
-	"github.com/abozorov/bozorov_shop/internal/models"
 	orderrepo "github.com/abozorov/bozorov_shop/internal/repo/order"
 	refreshtokenrepo "github.com/abozorov/bozorov_shop/internal/repo/refresh_token"
 	userrepo "github.com/abozorov/bozorov_shop/internal/repo/user"
@@ -62,9 +61,6 @@ func main() {
 	// create memCache
 	memCache := cache.New(time.Minute*5, time.Second*10)
 
-	// make ver Chanel
-	verification := make(chan *models.Verification, 1000000)
-
 	// make email sender
 	mailSender := mailsender.NewMailSender(
 		cfg.Email,
@@ -84,7 +80,6 @@ func main() {
 		tokenRepo,
 		sJWT,
 		memCache,
-		verification,
 		mailSender,
 	)
 	orderService := orderservice.NewOrderService(userRepo, orderRepo)
