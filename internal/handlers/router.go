@@ -30,6 +30,9 @@ func NewRouter(u *userhandler.UserHandler, o *orderhandler.OrderHandler, middlew
 	mux.Handle("GET /users/profile",
 		middleware.Auth(http.HandlerFunc(u.GetProfile)),
 	)
+	mux.Handle("GET /users/login-history",
+		middleware.Auth(http.HandlerFunc(u.LoginHistory)),
+	)
 	mux.Handle("PATCH /users/me",
 		middleware.Auth(http.HandlerFunc(u.UpdateMe)),
 	)

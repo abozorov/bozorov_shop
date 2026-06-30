@@ -40,4 +40,11 @@ type (
 		UpdateUserRole(ctx context.Context, user models.User) error
 		DeleteByID(ctx context.Context, id int) error
 	}
+
+	LoginHistoryRepo interface {
+		Create(ctx context.Context, track models.LoginHistory) error
+		GetAll(ctx context.Context) ([]models.LoginHistory, error)
+		GetAllByUserID(ctx context.Context, userID int) ([]models.LoginHistory, error)
+		GetByID(ctx context.Context, id int) (*models.LoginHistory, error)
+	}
 )

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/abozorov/bozorov_shop/internal/models"
+	mycontext "github.com/abozorov/bozorov_shop/internal/my_context"
 	"github.com/abozorov/bozorov_shop/internal/repo"
 	"github.com/abozorov/bozorov_shop/pkg/errs"
 	"github.com/abozorov/bozorov_shop/pkg/jwt"
@@ -21,29 +22,32 @@ import (
 )
 
 type UserService struct {
-	userR            repo.UserRepo
-	orderR           repo.OrderRepo
-	refreshTokenRepo repo.RefreshTokenRepo
-	jwt              *jwt.JWTSecret
-	memCache         *cache.Cache
-	mailSender       *mailsender.MailSender
+	userR         repo.UserRepo
+	orderR        repo.OrderRepo
+	refreshTokenR repo.RefreshTokenRepo
+	loginHistoryR repo.LoginHistoryRepo
+	jwt           *jwt.JWTSecret
+	memCache      *cache.Cache
+	mailSender    *mailsender.MailSender
 }
 
 func NewUserService(
 	userR repo.UserRepo,
 	orderR repo.OrderRepo,
-	refreshTokenRepo repo.RefreshTokenRepo,
+	refreshTokenR repo.RefreshTokenRepo,
+	loginHistoryR repo.LoginHistoryRepo,
 	jwt *jwt.JWTSecret,
 	memCache *cache.Cache,
 	mailsender *mailsender.MailSender) *UserService {
 
 	return &UserService{
-		userR:            userR,
-		orderR:           orderR,
-		refreshTokenRepo: refreshTokenRepo,
-		jwt:              jwt,
-		memCache:         memCache,
-		mailSender:       mailsender,
+		userR:         userR,
+		orderR:        orderR,
+		refreshTokenR: refreshTokenR,
+		loginHistoryR: loginHistoryR,
+		jwt:           jwt,
+		memCache:      memCache,
+		mailSender:    mailsender,
 	}
 }
 
@@ -175,13 +179,13 @@ func (u *UserService) Login(ctx context.Context, request models.LoginRequest) (*
 		return &models.Tokens{}, fmt.Errorf("user_service.Login: %w", err)
 	}
 	refreshToken := refreshtoken.Generate()
-	if exist, _ := u.refreshTokenRepo.ExistByUserID(ctx, user.ID); exist {
-		err = u.refreshTokenRepo.DeleteByUserID(ctx, user.ID)
+	if exist, _ := u.refreshTokenR.ExistByUserID(ctx, user.ID); exist {
+		err = u.refreshTokenR.DeleteByUserID(ctx, user.ID)
 		if err != nil {
 			return &models.Tokens{}, fmt.Errorf("user_service.Login: %w", err)
 		}
 	}
-	err = u.refreshTokenRepo.Create(ctx, models.RefreshToken{
+	err = u.refreshTokenR.Create(ctx, models.RefreshToken{
 		UserID:    user.ID,
 		TokenHash: refreshtoken.HashRefreshToken(refreshToken),
 		ExpiresAt: time.Now().Add(time.Hour * 24 * 7),
@@ -189,6 +193,26 @@ func (u *UserService) Login(ctx context.Context, request models.LoginRequest) (*
 	})
 	if err != nil {
 		return &models.Tokens{}, fmt.Errorf("user_service.Login: %w", err)
+	}
+
+	// save histoty
+	track, ok := ctx.Value(mycontext.TrackKey).(models.LoginHistory)
+	if !ok {
+		// log.SetFlags(log.LstdFlags | log.Lshortfile)
+		log.Printf("%s [WARNING] user_service.Login: Can't convert ctx.Value to models.LoginHistory\n",
+			time.Now().Format(time.DateTime),
+		)
+	} else {
+		track.CreatedAt = time.Now()
+		track.UserID = user.ID
+		err = u.loginHistoryR.Create(ctx, track)
+
+		if err != nil {
+			log.Printf("%s [WARNING] user_service.Login: %s\n",
+				time.Now().Format(time.DateTime),
+				err.Error(),
+			)
+		}
 	}
 
 	// return tokens
@@ -203,7 +227,7 @@ func (u *UserService) RefreshTokens(ctx context.Context, refreshToken string) (*
 	refreshToken = refreshtoken.HashRefreshToken(refreshToken)
 
 	// get token
-	rToken, err := u.refreshTokenRepo.GetByTokenHash(ctx, refreshToken)
+	rToken, err := u.refreshTokenR.GetByTokenHash(ctx, refreshToken)
 	if err != nil {
 		return &models.Tokens{}, fmt.Errorf("user_service.RefreshTokens: %w : %w", errs.ErrInvalidToken, err)
 	}
@@ -237,7 +261,7 @@ func (u *UserService) RefreshTokens(ctx context.Context, refreshToken string) (*
 	rToken.ExpiresAt = rToken.CreatedAt.Add(time.Hour * 24 * 7)
 
 	// update refresh token
-	err = u.refreshTokenRepo.Update(ctx, *rToken)
+	err = u.refreshTokenR.Update(ctx, *rToken)
 	if err != nil {
 		return &models.Tokens{}, fmt.Errorf("user_service.RefreshTokens: %w", err)
 	}
@@ -251,12 +275,12 @@ func (u *UserService) Logout(ctx context.Context, tokens models.Tokens) error {
 	tokens.Refresh = refreshtoken.HashRefreshToken(tokens.Refresh)
 
 	// look for existense
-	if exist, _ := u.refreshTokenRepo.ExistByToken(ctx, tokens.Refresh); !exist {
+	if exist, _ := u.refreshTokenR.ExistByToken(ctx, tokens.Refresh); !exist {
 		return fmt.Errorf("user_service.Logout: %w", errs.ErrInvalidToken)
 	}
 
 	// delete token
-	err := u.refreshTokenRepo.DeleteByToken(ctx, tokens.Refresh)
+	err := u.refreshTokenR.DeleteByToken(ctx, tokens.Refresh)
 	if err != nil {
 		return fmt.Errorf("user_service.Logout: %w", err)
 	}
@@ -331,6 +355,16 @@ func (u *UserService) GetProfile(ctx context.Context, id int) (*models.Profile, 
 	prof.UserOrders = orders
 	return prof, nil
 
+}
+
+func (u *UserService) GetLoginHistory(ctx context.Context, userID int) ([]models.LoginHistory, error) {
+	// get history
+	history, err := u.loginHistoryR.GetAllByUserID(ctx, userID)
+	if err != nil {
+		return []models.LoginHistory{}, fmt.Errorf("user_service.GetAll: %w", err)
+	}
+
+	return history, nil
 }
 
 func (u *UserService) Update(ctx context.Context, user models.User) error {

@@ -1,10 +1,13 @@
 package userhandler
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/abozorov/bozorov_shop/internal/models"
@@ -92,6 +95,30 @@ func newResponseProfile(prof models.Profile) *responseProfile {
 	}
 }
 
+func getIP(r *http.Request) string {
+	// Cloudflare
+	if ip := r.Header.Get("CF-Connecting-IP"); ip != "" {
+		return ip
+	}
+
+	// Прокси / балансировщик
+	if ip := r.Header.Get("X-Real-IP"); ip != "" {
+		return ip
+	}
+
+	// Цепочка прокси (берём первый — оригинальный)
+	if ip := r.Header.Get("X-Forwarded-For"); ip != "" {
+		return strings.Split(ip, ",")[0]
+	}
+
+	// Прямое подключение
+	host, port, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host + ":" + port
+}
+
 func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	var req models.RegisterRequest
@@ -112,6 +139,9 @@ func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	// get email & password
 	var req models.LoginRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
@@ -120,13 +150,22 @@ func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokens, err := h.service.Login(r.Context(), req)
+	// get metadata
+	track := models.LoginHistory{
+		UserAgent: r.UserAgent(),
+		IP:        getIP(r),
+	}
+	ctx := context.WithValue(r.Context(), mycontext.TrackKey, track)
+
+	// login
+	tokens, err := h.service.Login(ctx, req)
 	if err != nil {
 		h.logger.Error("user_handler.Login: ", zap.String("error", err.Error()))
 		errs.ErrsToHttp(w, err)
 		return
 	}
 
+	// answer
 	if err = json.NewEncoder(w).Encode(tokens); err != nil {
 		h.logger.Error("user_handler.Login: ", zap.String("error", err.Error()))
 		errs.ErrsToHttp(w, errs.ErrSomethingWentWrong)
@@ -288,6 +327,33 @@ func (h *UserHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	err = json.NewEncoder(w).Encode(resp)
 	if err != nil {
 		h.logger.Error("user_handler.GetMe: ", zap.String("error", err.Error()))
+		errs.ErrsToHttp(w, err)
+	}
+}
+
+func (h *UserHandler) LoginHistory(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	// get id
+	id, ok := r.Context().Value(mycontext.UserIDKey).(int)
+	if !ok {
+		h.logger.Error("user_handler.GetLoginHistory: ", zap.String("error", errs.ErrIncorrectLoginOrPassword.Error()))
+		errs.ErrsToHttp(w, errs.ErrIncorrectLoginOrPassword)
+		return
+	}
+
+	// get by id
+	history, err := h.service.GetLoginHistory(r.Context(), id)
+	if err != nil {
+		h.logger.Error("user_handler.GetLoginHistory: ", zap.String("error", err.Error()))
+		errs.ErrsToHttp(w, err)
+		return
+	}
+
+	// write response
+	err = json.NewEncoder(w).Encode(history)
+	if err != nil {
+		h.logger.Error("user_handler.LoginHistory: ", zap.String("error", err.Error()))
 		errs.ErrsToHttp(w, err)
 	}
 }

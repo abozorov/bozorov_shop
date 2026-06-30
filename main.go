@@ -15,6 +15,7 @@ import (
 	"github.com/abozorov/bozorov_shop/internal/handlers/middleware"
 	orderhandler "github.com/abozorov/bozorov_shop/internal/handlers/order"
 	userhandler "github.com/abozorov/bozorov_shop/internal/handlers/user"
+	loginhistoryrepo "github.com/abozorov/bozorov_shop/internal/repo/login_history"
 	orderrepo "github.com/abozorov/bozorov_shop/internal/repo/order"
 	refreshtokenrepo "github.com/abozorov/bozorov_shop/internal/repo/refresh_token"
 	userrepo "github.com/abozorov/bozorov_shop/internal/repo/user"
@@ -73,11 +74,13 @@ func main() {
 	userRepo := userrepo.NewUserRepo(db)
 	orderRepo := orderrepo.NewOrderRepo(db)
 	tokenRepo := refreshtokenrepo.NewRefreshTokenRepo(db)
+	loginHistoryR := loginhistoryrepo.NewLoginHistoryRepo(db)
 
 	userService := userservice.NewUserService(
 		userRepo,
 		orderRepo,
 		tokenRepo,
+		loginHistoryR,
 		sJWT,
 		memCache,
 		mailSender,
