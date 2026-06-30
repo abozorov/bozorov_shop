@@ -11,9 +11,7 @@ import (
 	"time"
 
 	"github.com/abozorov/bozorov_shop/internal/models"
-	orderrepo "github.com/abozorov/bozorov_shop/internal/repo/order"
-	refreshtokenrepo "github.com/abozorov/bozorov_shop/internal/repo/refresh_token"
-	userrepo "github.com/abozorov/bozorov_shop/internal/repo/user"
+	"github.com/abozorov/bozorov_shop/internal/repo"
 	"github.com/abozorov/bozorov_shop/pkg/errs"
 	"github.com/abozorov/bozorov_shop/pkg/jwt"
 	mailsender "github.com/abozorov/bozorov_shop/pkg/mail_sender"
@@ -23,18 +21,18 @@ import (
 )
 
 type UserService struct {
-	userR            *userrepo.UserRepo
-	orderR           *orderrepo.OrderRepo
-	refreshTokenRepo *refreshtokenrepo.RefreshTokenRepo
+	userR            repo.UserRepo
+	orderR           repo.OrderRepo
+	refreshTokenRepo repo.RefreshTokenRepo
 	jwt              *jwt.JWTSecret
 	memCache         *cache.Cache
 	mailSender       *mailsender.MailSender
 }
 
 func NewUserService(
-	userR *userrepo.UserRepo,
-	orderR *orderrepo.OrderRepo,
-	refreshTokenRepo *refreshtokenrepo.RefreshTokenRepo,
+	userR repo.UserRepo,
+	orderR repo.OrderRepo,
+	refreshTokenRepo repo.RefreshTokenRepo,
 	jwt *jwt.JWTSecret,
 	memCache *cache.Cache,
 	mailsender *mailsender.MailSender) *UserService {

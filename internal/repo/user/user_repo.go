@@ -101,24 +101,29 @@ func (u *UserRepo) GetAll(ctx context.Context) ([]models.User, error) {
 	defer rows.Close()
 
 	users := make([]models.User, 0, 100)
-	user := models.User{}
 
-	var deletedAt pgtype.Timestamptz
+	var (
+		user      models.User
+		deletedAt pgtype.Timestamptz
+		phone     pgtype.Text
+	)
 	for rows.Next() {
 		err = rows.Scan(
 			&user.ID,
 			&user.Name,
 			&user.Email,
-			&user.Phone,
+			&phone,
 			&user.Role,
 			&user.CreatedAt,
 			&deletedAt,
 		)
-		user.DeletedAt = deletedAt.Time
 		if err != nil {
 			return []models.User{},
 				fmt.Errorf("user_repo.GetAll: %w", errs.PostgresToErrs(err))
 		}
+		user.DeletedAt = deletedAt.Time
+		user.Phone = phone.String
+
 		users = append(users, user)
 	}
 

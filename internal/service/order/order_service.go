@@ -6,17 +6,16 @@ import (
 
 	"github.com/abozorov/bozorov_shop/internal/models"
 	mycontext "github.com/abozorov/bozorov_shop/internal/my_context"
-	orderrepo "github.com/abozorov/bozorov_shop/internal/repo/order"
-	userrepo "github.com/abozorov/bozorov_shop/internal/repo/user"
+	"github.com/abozorov/bozorov_shop/internal/repo"
 	"github.com/abozorov/bozorov_shop/pkg/errs"
 )
 
 type OrderService struct {
-	userR  *userrepo.UserRepo
-	orderR *orderrepo.OrderRepo
+	userR  repo.UserRepo
+	orderR repo.OrderRepo
 }
 
-func NewOrderService(userR *userrepo.UserRepo, orderR *orderrepo.OrderRepo) *OrderService {
+func NewOrderService(userR repo.UserRepo, orderR repo.OrderRepo) *OrderService {
 	return &OrderService{
 		userR:  userR,
 		orderR: orderR,

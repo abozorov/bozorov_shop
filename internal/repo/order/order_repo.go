@@ -128,9 +128,6 @@ func (o *OrderRepo) GetAllByUserID(ctx context.Context, userID int) ([]models.Or
 		orders = append(orders, order)
 	}
 
-	if len(orders) == 0 {
-		return orders, errs.ErrNotFound
-	}
 	return orders, nil
 }
 
