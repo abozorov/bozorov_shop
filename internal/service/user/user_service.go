@@ -274,13 +274,25 @@ func (u *UserService) Logout(ctx context.Context, tokens models.Tokens) error {
 	// hash refresh token
 	tokens.Refresh = refreshtoken.HashRefreshToken(tokens.Refresh)
 
-	// look for existense
-	if exist, _ := u.refreshTokenR.ExistByToken(ctx, tokens.Refresh); !exist {
+	// get user id
+	userID, ok := ctx.Value(mycontext.UserIDKey).(int)
+	if !ok {
+		return fmt.Errorf("user_service.Logout: %w", errs.ErrInvalidToken)
+	}
+
+	// get token
+	token, err := u.refreshTokenR.GetByTokenHash(ctx, tokens.Refresh)
+	if err != nil {
+		return fmt.Errorf("user_service.Logout: %w", err)
+	}
+
+	// check user ID
+	if token.UserID != userID {
 		return fmt.Errorf("user_service.Logout: %w", errs.ErrInvalidToken)
 	}
 
 	// delete token
-	err := u.refreshTokenR.DeleteByToken(ctx, tokens.Refresh)
+	err = u.refreshTokenR.DeleteByToken(ctx, tokens.Refresh)
 	if err != nil {
 		return fmt.Errorf("user_service.Logout: %w", err)
 	}

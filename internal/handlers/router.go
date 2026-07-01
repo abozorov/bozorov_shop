@@ -20,8 +20,6 @@ func NewRouter(u *userhandler.UserHandler, o *orderhandler.OrderHandler, middlew
 	mux.HandleFunc("POST /auth/login", u.Login)
 	mux.HandleFunc("POST /user/verify", u.Verify)
 	mux.HandleFunc("POST /auth/refresh", u.RefreshToken)
-	mux.HandleFunc("POST /auth/logout", u.Logout)
-
 
 	// Authorized user: USERS
 	mux.Handle("GET /users/me",
@@ -41,6 +39,9 @@ func NewRouter(u *userhandler.UserHandler, o *orderhandler.OrderHandler, middlew
 	)
 	mux.Handle("PATCH /users/change-password",
 		middleware.Auth(http.HandlerFunc(u.ChangePassword)),
+	)
+	mux.Handle("POST /auth/logout",
+		middleware.Auth(http.HandlerFunc(u.Logout)),
 	)
 
 	// ORDERS

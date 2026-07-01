@@ -94,7 +94,8 @@ func (l *LoginHistoryRepo) GetAllByUserID(ctx context.Context, userID int) ([]mo
 			user_agent,
 			created_at
 		 FROM login_history
-		 WHERE user_id=$1;
+		 WHERE user_id=$1
+		 ORDER BY created_at DESC
 	`
 	rows, err := l.db.Query(ctx, query, userID)
 	if err != nil {
